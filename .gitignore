@@ -1,0 +1,32 @@
+# Proprietary doctrine & gold-standard report samples — never commit
+# (v2 policy carried forward: proprietary doctrine stays out of git)
+proprietary/
+
+# Dossiers — separate git repo (design/05 §8, design/06); tracked by its own repo,
+# never by this one. Lives inside the working tree but is gitignored here.
+dossiers/
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
