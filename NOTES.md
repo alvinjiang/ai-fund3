@@ -95,6 +95,36 @@ was normalized to `bull_vs_bear` to match the v2 key. Source mixes US/UK spellin
 (capitalisation/finalising/analysed/parallelisable/labour vs behavior/labeling) — preserved
 verbatim. `proprietary/` stays gitignored; only the reorganized `doctrine/` is tracked.
 
+## 2026-07-13 — SPEC session: cross-cutting decisions (Phases 1.1–7.1)
+
+Dated log of decisions and risks that span more than one spec. Each is stated in full in
+the spec that owns it; this is the index. (Written during the SPEC-tier session that
+produced `specs/SPEC-*.md`; no code written.)
+
+**From SPEC-DOMAIN (1.1):**
+
+- **`Numeric`, never `Float`, for every price/quantity/money column** (v2 used `Float`).
+  Follows design/01 principle 6 (deterministic money path). Consequence: the Phase 7.3
+  data migration casts v2 floats on import.
+- **No Postgres `ENUM` types** — `String` + `CHECK` + Python `StrEnum`. Adding a run type
+  or stage role stays an ordinary migration instead of an `ALTER TYPE`.
+- **`stage_attempts` is its own table.** Failed attempts cost real money; cost, transcript,
+  and validation errors are per attempt, so retries are attributable (v2 cost-drift lesson).
+- **Transactional outbox (`outbox_events`)** is how core notifies the adapter. Written in
+  the same transaction as the domain change, consumed with `SKIP LOCKED` — a disconnected
+  adapter cannot miss a gate or a channel creation, and cannot double-post.
+- **Per-ticker serialization = `coverage_run_locks` row, held through `waiting_pm`** (the
+  dossier branch is unmerged until the PM decides). **Risk:** an unanswered initiation gate
+  blocks that ticker's other mutating runs until the PM answers or cancels. Revisit after
+  the 2.4 pilot if it bites; the alternative (merge on finalizer success) weakens the
+  "PM decides" boundary, so it is not the default.
+- **pgvector is not in the alembic baseline** (no extension, no embedding column). The
+  keep/drop decision belongs to Phase 4; re-adopting it is an additive migration.
+- **One severity vocabulary** (`thesis | valuation | info`) across tripwires and events.
+  The monitor role prompt's `materiality: high|medium|low|none` is scoring output, mapped
+  onto severity by code — it is never a stored state. (Closes the naming drift flagged in
+  the 0.3 review.)
+
 ## 2026-07-12 — Phase 0.3 complete (role-prompt review)
 
 Reviewed all 8 role prompts (`doctrine/roles/*.md`) against `core.md` for terminology
