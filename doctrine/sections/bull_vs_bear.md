@@ -1,0 +1,3 @@
+# Bull vs bear
+
+“Act as an institutional-grade equity analyst. Perform a deep-dive, adversarial analysis of the company. Start with the bull case (competitive advantages, moat sustainability, growth levers including secular tailwinds or potential earnings surprises, capital allocation). Then the bear case (2-3 risks that could permanently impair the business, potential margin compression or revenue deceleration, high expectations). Perform a pre-mortem. Consider whether current valuation multiples are too high. Finally, generate a contrarian view of what the market is currently refusing to see.”

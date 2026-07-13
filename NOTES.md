@@ -59,3 +59,63 @@ Decisions worth flagging:
   git config files were modified. Amend if a different identity is preferred.
 
 Next: Phase 0.2 (seed doctrine) — a reasoning-model session handles the SPEC steps.
+
+## 2026-07-12 — Phase 0.2 complete (seed doctrine)
+
+Seeded `doctrine/` from `proprietary/Equity-Research-Prompts_2026-06-05.md` (reorganized,
+not rewritten — wording preserved verbatim, including source typos like "occurence",
+"whats best", "formay", "why?What"). Split per `design/03` §3:
+
+- `doctrine/core.md` — preamble + "Additional Notes" (References, Currencies,
+  Calculations, Price prediction, Recommendations, Check your work) + the `###`
+  past-mistakes *process-rule* subsections (Subject-company market data, Comps tables,
+  Workbooks, Tie actuals to filings, Report-to-workbook reconciliation, Validation, FX
+  and capital raises, Division of labour, Terminology).
+- `doctrine/lessons/global.md` — the "Further notes from past mistakes" top-level bullets
+  (the lessons; amendable only via distillation PRs).
+- `doctrine/report/full-report.md` — Workflow for full reports + Full reports (stat block,
+  `NAME_SYM_EXCH-YYYYMMDD` naming, corrections-log requirement).
+- `doctrine/sections/*.md` — the 14 section prompts, one file each.
+- `doctrine/templates/ironclad-template.html` — extracted from
+  `proprietary/yakult-20260610.zip` (`Yakult-Honsha/ironclad-template.html`).
+
+Split decision: the source's "Further notes from past mistakes" section interleaved
+top-level lessons with `###` operational process-rule subsections. I separated them —
+bullets → `lessons/global.md`, `###` subsections → `core.md` — so every source line lands
+in exactly one doctrine file (no loss, no duplication). The "no-placeholder" rule is
+enforced in `core.md` (### Workbooks/Comps) and stated as a lesson in `lessons/global.md`.
+
+14-section cross-check vs v2 `prompts/equity_prompts.py` (`SECTION_PROMPTS`): **1:1 match,
+no drift** — company_overview, bull_vs_bear, competitive_advantages, supply_chain,
+segments, earnings_result, earnings_calls, management, stock_price_analysis, comps,
+forward_projection, red_flags, management_questions, devils_advocate. v2 stored one-line
+summaries; the source contains the full proven prompts (full coverage, nothing
+missing/extra). Filenames use v2's canonical keys; note `design/03`'s example "bull_bear"
+was normalized to `bull_vs_bear` to match the v2 key. Source mixes US/UK spelling
+(capitalisation/finalising/analysed/parallelisable/labour vs behavior/labeling) — preserved
+verbatim. `proprietary/` stays gitignored; only the reorganized `doctrine/` is tracked.
+
+## 2026-07-12 — Phase 0.3 complete (role-prompt review)
+
+Reviewed all 8 role prompts (`doctrine/roles/*.md`) against `core.md` for terminology
+consistency. **No inconsistencies.** Roles faithfully use core.md doctrine vocabulary:
+"unverified" (never a plausible substitute), pinned price (one authoritative timestamped
+close, cross-checked across two sources), primary filing, workbook one-computed-layer
+(formulas not typed numbers), report↔workbook reconciliation (report value vs workbook
+cell vs match Y/N), 52-week range sanity gate, HKD/SGD/USD currency discipline, corrections
+log with attribution, street consensus, confidence/target/horizon. The finalizer's
+`NAME_SYM_EXCH-YYYYMMDD` naming and reconciliation table match `report/full-report.md`; the
+distiller quotes core.md's cached-"last close" rule verbatim. Roles introduce v3 terms not
+in core.md (tripwires, dossier, predictions, `stage_result.yaml`, lead/contributor/house,
+substrate) — expected, since core.md is seeded from the v2-era source and roles are
+v3-authored; not an inconsistency. No role prompts edited (PROMPTS 0.3: report, don't
+silently edit; tuning deferred to Phase 2/3 PM gates). `verifier.md` (the PM's proven
+multi-pass formula) confirmed intact — not weakened.
+
+Two minor cross-*document* naming drifts flagged for later SPEC alignment (NOT core.md
+inconsistencies, no action now):
+1. `monitor.md` scoring output field is `reason`; `design/03` §2.4 uses `one_line_reason`.
+2. `monitor.md` `materiality: high|medium|low|none` vs `design/03` §2.4 escalation severity
+   vocabulary (`thesis`/`info`) — reconcile in SPEC-MONITORING (Phase 4).
+
+Next: Phase 1.1 SPEC — domain schema & coverage state machine (reasoning-model session).

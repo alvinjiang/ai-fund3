@@ -1,0 +1,3 @@
+# Earnings result
+
+Analyze the company's latest earnings result. Revenue & profit vs. expectations. Did the company beat or miss consensus? By how much? Key segment drivers. Which business lines drove the result? Any notable acceleration or deceleration? Margin trends. What happened to gross/operating margins and why? Guidance & outlook. What did management guide for next quarter/full year? Any change in tone? Balance sheet flags. Anything notable in cash flow, inventory, receivables, or debt? Market reaction. How did the stock react and what does it signal about what was priced in? Flag anything that looks unusual relative to the company's recent history. Perform calculations using a spreadsheet using the spreadsheet rules in the “Calculations” section below.

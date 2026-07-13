@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="curica" data-template="ironclad" data-mode="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><!-- IRONCLAD:TITLE --></title>
+<!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  IRONCLAD EQUITY REPORT TEMPLATE  v1.0                      ║
+  ║  Structure: Ironclad (layout, sections, data contracts)      ║
+  ║  Theme:     Curica  (colours, fonts, decorative devices)     ║
+  ║                                                              ║
+  ║  TO SWAP THEME: replace the :root block and font imports     ║
+  ║  with your target theme's token file. All section layout,    ║
+  ║  class names, and data-* attributes are theme-independent.   ║
+  ║                                                              ║
+  ║  SECTION IDs (stable across themes):                         ║
+  ║    #ir-header      Report header + rating band               ║
+  ║    #ir-thesis      Investment thesis                         ║
+  ║    #ir-financials  Financial summary table + price chart     ║
+  ║    #ir-overview    Business model overview                   ║
+  ║    #ir-segments    Revenue by segment                        ║
+  ║    #ir-bull-bear   Bull vs Bear adversarial analysis         ║
+  ║    #ir-competitive Competitive advantages / moat             ║
+  ║    #ir-management  Management assessment                     ║
+  ║    #ir-supply      Supply chain map                          ║
+  ║    #ir-earnings    Latest earnings analysis                  ║
+  ║    #ir-comps       Comparable companies table                ║
+  ║    #ir-forward     Forward projections / EPS estimates       ║
+  ║    #ir-red-flags   Red flags / forensic accounting           ║
+  ║    #ir-valuation   Price target build                        ║
+  ║    #ir-questions   Management questions                      ║
+  ║    #ir-devils      Devil's advocate / short case             ║
+  ║    #ir-refs        References                                ║
+  ║    #ir-footer      Footer + disclaimer                       ║
+  ║                                                              ║
+  ║  DATA CONTRACTS: each IRONCLAD:* comment marks a bind point  ║
+  ║  for programmatic population or manual replacement.          ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  THEME: Curica
+  Source: Curica brand identity — logo pixel-sampled.
+  Teal #20514c from 10,944px across logo text/circle.
+  See theme-curica.css for full annotated token set.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════
+   THEME LAYER — swap this entire block to change themes
+   Token names are stable; values change per theme.
+   ══════════════════════════════════════════════════════ */
+:root {
+  /* Ground / paper */
+  --page:           #F4F4F2;
+  --bg:             #EAEAEA;
+  --bg-warm:        #E4E2DC;
+  --surface:        #F2F5EE;
+  --surface-mid:    #E6EDE4;
+  --surface-deep:   #D8E4D4;
+  --surface-rule:   #C0D0BC;
+  --border-dim:     #D4D4D4;
+  --border:         #B8B8B4;
+  --border-strong:  #98A09C;
+  /* Primary accent — Curica teal */
+  --accent:         #20514c;
+  --accent-dark:    #163a36;
+  --accent-bright:  #2d6b65;
+  --accent-mid:     #4a8c85;
+  --accent-dim:     #a8c8c4;
+  --accent-wash:    #e4efee;
+  /* Gold — hairline accent only */
+  --gold:           #B8860B;
+  --gold-bright:    #D4A012;
+  --gold-dim:       #8A6408;
+  /* Text */
+  --ink:            #1a1f1e;
+  --ink-bright:     #0d1210;
+  --ink-secondary:  #404845;
+  --ink-dim:        #6a7270;
+  --ink-pale:       #98a09c;
+  --text-label:     #20514c;
+  --heading:        #163a36;
+  /* Semantic */
+  --bull:           #1a6848;
+  --bull-mid:       #2E9E5A;
+  --bull-bg:        rgba(32,81,76,0.08);
+  --bear:           #8b1a2a;
+  --bear-mid:       #c42830;
+  --bear-bg:        rgba(139,26,42,0.08);
+  --gain:           #1a6848;
+  --gain-bg:        rgba(32,81,76,0.08);
+  --loss:           #8b1a2a;
+  --loss-bg:        rgba(139,26,42,0.08);
+  --alert:          #8b4a0a;
+  --alert-bg:       rgba(184,134,11,0.10);
+  --neutral-bg:     rgba(128,128,128,0.10);
+  /* Stripe accents */
+  --stripe-1:       #B88018;
+  --stripe-2:       #7A6830;
+  --stripe-3:       #20514c;
+  /* Typography */
+  --font-display:   "Jost", "Century Gothic", system-ui, sans-serif;
+  --font-body:      "Lora", "Palatino Linotype", Georgia, serif;
+  --font-mono:      "JetBrains Mono", "Fira Mono", ui-monospace, monospace;
+}
+
+/* ══════════════════════════════════════════════════════
+   STRUCTURE LAYER — Ironclad layout. Theme-independent.
+   ══════════════════════════════════════════════════════ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Page shell ── */
+.ir-page {
+  width: 210mm;
+  min-height: 297mm;
+  background: var(--page);
+  margin: 10mm auto;
+  padding: 18mm 20mm 28mm;
+  position: relative;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.15);
+  page-break-after: always;
+}
+.ir-page:last-child { page-break-after: auto; }
+
+/* ── THE GOLD BAND — Curica structural device ── */
+.ir-rule {
+  height: 5px;
+  background: linear-gradient(to bottom,
+    var(--stripe-1) 0, var(--stripe-1) 3px,
+    var(--page)     3px, var(--page)     3.5px,
+    var(--stripe-2) 3.5px, var(--stripe-2) 4.5px,
+    var(--page)     4.5px, var(--page)     5px);
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+.ir-rule.thin {
+  height: 3.5px;
+  background: linear-gradient(to bottom,
+    var(--stripe-1) 0, var(--stripe-1) 2px,
+    var(--page)     2px, var(--page)     2.5px,
+    var(--stripe-2) 2.5px, var(--stripe-2) 3.5px);
+}
+
+/* ── Report header ── */
+#ir-header { margin-bottom: 6mm; }
+.ir-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 3mm;
+}
+.ir-brand {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+}
+.ir-brand-sub {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  display: block;
+  margin-top: 1px;
+}
+.ir-report-meta { text-align: right; }
+.ir-report-type {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--ink-dim);
+}
+.ir-report-date {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-secondary);
+  margin-top: 2px;
+}
+.ir-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink-bright);
+  margin: 3mm 0 1mm;
+}
+.ir-sub {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  color: var(--ink-dim);
+  letter-spacing: 0.06em;
+}
+
+/* ── Rating band ── */
+.ir-rating-band {
+  background: var(--surface-mid);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  margin: 4mm 0 5mm;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ir-rating-pill {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 12px;
+  flex-shrink: 0;
+}
+.ir-rating-pill.buy  { background: var(--gain-bg);     color: var(--gain); border: 1.5px solid var(--gain); }
+.ir-rating-pill.hold { background: var(--neutral-bg);  color: var(--ink-secondary); border: 1.5px solid var(--border); }
+.ir-rating-pill.sell { background: var(--loss-bg);     color: var(--loss); border: 1.5px solid var(--loss); }
+.ir-rating-pill.watch{ background: var(--alert-bg);    color: var(--alert); border: 1.5px solid var(--gold); }
+.ir-stat { display: flex; flex-direction: column; gap: 1px; }
+.ir-stat-lbl {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-label);
+}
+.ir-stat-val {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-bright);
+  font-variant-numeric: tabular-nums;
+}
+.ir-stat-val.pos { color: var(--gain); }
+.ir-stat-val.neg { color: var(--loss); }
+.ir-vsep { width: 1px; height: 28px; background: var(--border-dim); flex-shrink: 0; }
+
+/* ── Section headers ── */
+.ir-section { margin-top: 5mm; }
+.ir-section-hd {
+  background: var(--surface-mid);
+  padding: 3.5px 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-left: 3px solid var(--accent);
+  box-shadow: inset 0 -1px 0 0 var(--gold);
+  margin-bottom: 3mm;
+}
+.ir-section-title {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--heading);
+  letter-spacing: 0.05em;
+}
+.ir-section-sub {
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  color: var(--ink-dim);
+}
+
+/* ── Body text ── */
+.ir-body {
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  color: var(--ink);
+  line-height: 1.65;
+  margin-bottom: 3mm;
+}
+.ir-body strong { font-weight: 600; color: var(--ink-bright); }
+.ir-body em { font-style: italic; color: var(--ink-secondary); }
+
+/* ── Data tables ── */
+.ir-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 4mm;
+  font-size: 9px;
+}
+.ir-table thead tr {
+  background: var(--surface-deep);
+  border-bottom: 1.5px solid var(--border);
+}
+.ir-table thead th {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--text-label);
+  padding: 3px 6px;
+  text-align: right;
+  white-space: nowrap;
+}
+.ir-table thead th:first-child { text-align: left; }
+.ir-table tbody tr { border-bottom: 0.5px solid var(--surface-rule); }
+.ir-table tbody tr:nth-child(even) { background: var(--surface); }
+.ir-table td {
+  padding: 3px 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-align: right;
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.ir-table td:first-child {
+  text-align: left;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+.ir-table td.pos  { color: var(--gain); }
+.ir-table td.neg  { color: var(--loss); }
+.ir-table td.warn { color: var(--alert); }
+.ir-table td.bold { font-weight: 600; color: var(--ink-bright); }
+.ir-table tfoot tr {
+  background: var(--surface-mid);
+  border-top: 1.5px solid var(--border);
+}
+.ir-table tfoot td { font-weight: 600; color: var(--ink-bright); }
+
+/* ── Layout helpers ── */
+.ir-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5mm;
+  margin-bottom: 5mm;
+}
+.ir-three-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4mm;
+  margin-bottom: 5mm;
+}
+.ir-wide-narrow {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 5mm;
+  margin-bottom: 5mm;
+}
+
+/* ── Bull / Bear cards ── */
+.ir-bull-card, .ir-bear-card {
+  border: 1px solid var(--border);
+  padding: 4mm;
+}
+.ir-bull-card {
+  border-left: 3px solid var(--bull);
+  background: var(--bull-bg);
+}
+.ir-bear-card {
+  border-left: 3px solid var(--bear);
+  background: var(--bear-bg);
+}
+.ir-bull-head {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--bull);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 3mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid rgba(26,104,72,0.2);
+}
+.ir-bear-head {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--bear);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 3mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid rgba(139,26,42,0.2);
+}
+.ir-bull-point, .ir-bear-point {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 2.5mm;
+  font-family: var(--font-body);
+  font-size: 9px;
+  line-height: 1.55;
+}
+.ir-bull-dot { color: var(--bull); flex-shrink: 0; font-size: 10px; margin-top: 0px; }
+.ir-bear-dot { color: var(--bear); flex-shrink: 0; font-size: 10px; margin-top: 0px; }
+
+/* ── Risk items ── */
+.ir-risk {
+  display: flex;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 0.5px solid var(--surface-rule);
+}
+.ir-risk-icon { color: var(--loss); font-size: 10px; flex-shrink: 0; margin-top: 1px; }
+.ir-risk-icon.warn { color: var(--alert); }
+.ir-risk-text {
+  font-family: var(--font-body);
+  font-size: 9px;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+.ir-risk-text strong { color: var(--ink-bright); font-weight: 600; }
+
+/* ── Red flag items ── */
+.ir-flag {
+  display: flex;
+  gap: 6px;
+  padding: 4px 6px;
+  margin-bottom: 2px;
+  background: var(--alert-bg);
+  border-left: 2px solid var(--gold);
+}
+.ir-flag-icon { color: var(--alert); font-size: 9px; flex-shrink: 0; }
+.ir-flag-text { font-family: var(--font-body); font-size: 9px; color: var(--ink-secondary); line-height: 1.5; }
+.ir-flag-text strong { color: var(--alert); }
+
+/* ── Callout box ── */
+.ir-callout {
+  background: var(--accent-wash);
+  border-left: 3px solid var(--accent);
+  box-shadow: inset 0 -1px 0 0 var(--gold);
+  padding: 3mm 4mm;
+  margin-bottom: 3mm;
+}
+.ir-callout-label {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-label);
+  margin-bottom: 1mm;
+}
+.ir-callout-text {
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  color: var(--ink);
+  line-height: 1.6;
+  font-style: italic;
+}
+
+/* ── Management cards ── */
+.ir-mgmt-card {
+  background: var(--surface);
+  border: 1px solid var(--border-dim);
+  border-top: 2px solid var(--accent);
+  padding: 3mm;
+  margin-bottom: 3mm;
+}
+.ir-mgmt-name {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--heading);
+}
+.ir-mgmt-role {
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  color: var(--text-label);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 2mm;
+}
+.ir-mgmt-detail {
+  font-family: var(--font-body);
+  font-size: 8.5px;
+  color: var(--ink-secondary);
+  line-height: 1.55;
+}
+
+/* ── Valuation build ── */
+.ir-val-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 0.5px solid var(--surface-rule);
+}
+.ir-val-method { font-family: var(--font-body); font-size: 9.5px; color: var(--ink); }
+.ir-val-price  { font-family: var(--font-mono); font-size: 10px; color: var(--ink-bright); font-variant-numeric: tabular-nums; }
+.ir-val-weight { font-family: var(--font-mono); font-size: 8px; color: var(--ink-dim); }
+.ir-val-total  { border-top: 1.5px solid var(--border); margin-top: 1px; }
+.ir-val-total .ir-val-method { font-weight: 600; }
+.ir-val-total .ir-val-price  { color: var(--accent); font-size: 12px; }
+
+/* ── Chart container ── */
+.ir-chart {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 4mm;
+  margin-bottom: 4mm;
+}
+.ir-chart-title {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim);
+  margin-bottom: 3mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ir-chart-legend {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ir-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 7px;
+  color: var(--ink-dim);
+}
+
+/* ── Supply chain ── */
+.ir-supply-chain {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: 4mm;
+  overflow-x: auto;
+}
+.ir-sc-stage {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border-dim);
+  background: var(--surface);
+  padding: 2.5mm;
+  position: relative;
+}
+.ir-sc-stage + .ir-sc-stage { border-left: none; }
+.ir-sc-stage.highlight { background: var(--accent-wash); border-color: var(--accent); }
+.ir-sc-head {
+  font-family: var(--font-mono);
+  font-size: 6.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-label);
+  margin-bottom: 1.5mm;
+  padding-bottom: 1mm;
+  border-bottom: 1px solid var(--border-dim);
+}
+.ir-sc-item {
+  font-family: var(--font-body);
+  font-size: 8px;
+  color: var(--ink-secondary);
+  line-height: 1.4;
+  padding: 1px 0;
+}
+.ir-sc-item.key { font-weight: 600; color: var(--accent); }
+.ir-sc-arrow {
+  display: flex;
+  align-items: center;
+  padding: 0 1mm;
+  color: var(--ink-dim);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ── Questions list ── */
+.ir-question {
+  display: flex;
+  gap: 6px;
+  padding: 3.5px 0;
+  border-bottom: 0.5px solid var(--surface-rule);
+}
+.ir-q-num {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-label);
+  flex-shrink: 0;
+  min-width: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.ir-q-text {
+  font-family: var(--font-body);
+  font-size: 9px;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+.ir-q-text strong { color: var(--ink-bright); }
+
+/* ── Tag / badge ── */
+.ir-tag {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 2px 7px;
+  border: 1px solid var(--accent-mid);
+  color: var(--ink-secondary);
+  display: inline-block;
+  margin-right: 2px;
+}
+.ir-tag.bull  { border-color: var(--bull-mid);  color: var(--gain); }
+.ir-tag.bear  { border-color: var(--bear-mid);  color: var(--loss); }
+.ir-tag.alert { border-color: var(--gold);      color: var(--alert); }
+
+/* ── Watchlist / snapshot card ── */
+.ir-snapshot-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-top: 3px solid var(--accent);
+  padding: 4mm;
+  margin-bottom: 4mm;
+}
+.ir-snap-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 3mm;
+}
+.ir-snap-ticker {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--heading);
+}
+.ir-snap-name {
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  color: var(--ink-dim);
+  letter-spacing: 0.06em;
+  margin-top: 1px;
+}
+.ir-snap-status {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  color: var(--ink-secondary);
+}
+.ir-snap-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3mm;
+  margin-bottom: 3mm;
+  padding: 3mm;
+  background: var(--surface-mid);
+  border: 1px solid var(--border-dim);
+}
+.ir-snap-metric { display: flex; flex-direction: column; gap: 1px; }
+.ir-snap-lbl {
+  font-family: var(--font-mono);
+  font-size: 6.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-label);
+}
+.ir-snap-val {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-bright);
+  font-variant-numeric: tabular-nums;
+}
+.ir-snap-val.pos { color: var(--gain); }
+.ir-snap-val.neg { color: var(--loss); }
+
+/* ── References ── */
+.ir-ref {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--ink-dim);
+  line-height: 1.6;
+  padding: 2px 0;
+  border-bottom: 0.5px solid var(--border-dim);
+}
+.ir-ref a { color: var(--accent-bright); text-decoration: none; }
+.ir-ref a:hover { text-decoration: underline; }
+
+/* ── Footer ── */
+.ir-footer {
+  position: absolute;
+  bottom: 10mm;
+  left: 20mm;
+  right: 20mm;
+  border-top: 0.5px solid var(--border);
+  padding-top: 2mm;
+  display: flex;
+  justify-content: space-between;
+}
+.ir-footer-l, .ir-footer-r {
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  color: var(--ink-dim);
+}
+.ir-footer-rule {
+  position: absolute;
+  bottom: 8mm;
+  left: 20mm;
+  right: 20mm;
+}
+
+/* ── Disclaimer ── */
+.ir-disc {
+  font-family: var(--font-body);
+  font-size: 7px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+  margin-top: 4mm;
+  padding-top: 2mm;
+  border-top: 0.5px solid var(--border);
+}
+
+/* ── Utility ── */
+.avoid-break  { page-break-inside: avoid; }
+.page-break   { page-break-before: always; }
+.pos { color: var(--gain); }
+.neg { color: var(--loss); }
+.warn{ color: var(--alert); }
+.dim { color: var(--ink-dim); }
+.mono{ font-family: var(--font-mono); }
+.tnum{ font-variant-numeric: tabular-nums; }
+.bold{ font-weight: 600; }
+.spacer{ flex: 1; }
+.mt-2 { margin-top: 2mm; }
+.mt-3 { margin-top: 3mm; }
+.mb-2 { margin-bottom: 2mm; }
+.mb-3 { margin-bottom: 3mm; }
+
+/* ── Print ── */
+@media print {
+  body { background: white; font-size: 10pt; }
+  .ir-page { box-shadow: none; margin: 0; page-break-after: always; }
+  .no-print { display: none !important; }
+  .avoid-break { page-break-inside: avoid; }
+  @page { size: A4; margin: 0; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+@media screen {
+  body { padding: 5mm 0 20mm; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     IRONCLAD TEMPLATE — FULL INSTITUTIONAL REPORT
+     Replace all IRONCLAD:* placeholders with live data.
+     Sections are independent — reorder, add, or remove freely.
+     ═══════════════════════════════════════════════════════════════ -->
+
+<div class="ir-page" id="page-1">
+
+  <!-- ── HEADER ───────────────────────────────────────────────── -->
+  <div id="ir-header">
+    <div class="ir-header-top">
+      <div>
+        <div class="ir-brand"><!-- IRONCLAD:FIRM_NAME --></div>
+        <span class="ir-brand-sub">Equity Research · <!-- IRONCLAD:CONFIDENTIALITY --></span>
+      </div>
+      <div class="ir-report-meta">
+        <div class="ir-report-type"><!-- IRONCLAD:REPORT_TYPE --></div>
+        <div class="ir-report-date"><!-- IRONCLAD:REPORT_DATE --> · <!-- IRONCLAD:ANALYST --></div>
+      </div>
+    </div>
+    <div class="ir-rule"></div>
+    <div style="margin-top:3mm">
+      <div class="ir-title"><!-- IRONCLAD:COMPANY_NAME --> — <!-- IRONCLAD:HEADLINE --></div>
+      <div class="ir-sub"><!-- IRONCLAD:TICKER --> · <!-- IRONCLAD:EXCHANGE --> · <!-- IRONCLAD:SECTOR --> · <!-- IRONCLAD:SIZE --> · <!-- IRONCLAD:CURRENCY --></div>
+    </div>
+  </div>
+
+  <!-- ── RATING BAND ──────────────────────────────────────────── -->
+  <div class="ir-rating-band">
+    <div class="ir-rating-pill <!-- IRONCLAD:RATING_CLASS -->"><!-- IRONCLAD:RATING --></div>
+    <div class="ir-vsep"></div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">Price Target (12M)</span>
+      <span class="ir-stat-val"><!-- IRONCLAD:TARGET_PRICE --></span>
+    </div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">Current Price</span>
+      <span class="ir-stat-val"><!-- IRONCLAD:CURRENT_PRICE --></span>
+    </div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">Price Date</span>
+      <span class="ir-stat-val" style="font-size:10px"><!-- IRONCLAD:PRICE_DATE --></span>
+    </div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">Upside / Downside</span>
+      <span class="ir-stat-val <!-- IRONCLAD:UPSIDE_CLASS -->"><!-- IRONCLAD:UPSIDE --></span>
+    </div>
+    <div class="ir-vsep"></div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">52-Week Range</span>
+      <span class="ir-stat-val" style="font-size:10px"><!-- IRONCLAD:52W_RANGE --></span>
+    </div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">Mkt Cap</span>
+      <span class="ir-stat-val"><!-- IRONCLAD:MKT_CAP --></span>
+    </div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">EV/EBITDA</span>
+      <span class="ir-stat-val"><!-- IRONCLAD:EV_EBITDA --></span>
+    </div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">P/E (FWD)</span>
+      <span class="ir-stat-val"><!-- IRONCLAD:PE_FWD --></span>
+    </div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">Div Yield (Fwd)</span>
+      <span class="ir-stat-val"><!-- IRONCLAD:DIV_YIELD --></span>
+    </div>
+    <div class="ir-stat">
+      <span class="ir-stat-lbl">Avg Volume</span>
+      <span class="ir-stat-val" style="font-size:10px"><!-- IRONCLAD:AVG_VOL --></span>
+    </div>
+  </div>
+
+  <!-- ── INVESTMENT THESIS ────────────────────────────────────── -->
+  <div id="ir-thesis" class="ir-section avoid-break">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Investment Thesis</span>
+      <span class="ir-section-sub"><!-- IRONCLAD:RATING --> · <!-- IRONCLAD:REPORT_DATE --></span>
+    </div>
+    <p class="ir-body"><!-- IRONCLAD:THESIS_P1 --></p>
+    <p class="ir-body"><!-- IRONCLAD:THESIS_P2 --></p>
+  </div>
+
+  <!-- ── FINANCIAL SUMMARY + PRICE CHART ─────────────────────── -->
+  <div id="ir-financials" class="ir-two-col avoid-break">
+    <div>
+      <div class="ir-section-hd" style="margin-bottom:2mm">
+        <span class="ir-section-title">Financial Summary</span>
+        <span class="ir-section-sub"><!-- IRONCLAD:FY_NOTE --> · <!-- IRONCLAD:CURRENCY --></span>
+      </div>
+      <table class="ir-table">
+        <thead>
+          <tr>
+            <th style="text-align:left">Metric</th>
+            <th><!-- IRONCLAD:FY_HIST1 --></th>
+            <th><!-- IRONCLAD:FY_HIST2 --></th>
+            <th><!-- IRONCLAD:FY_EST1 --></th>
+            <th><!-- IRONCLAD:FY_EST2 --></th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- IRONCLAD:FINANCIALS_ROWS
+          <tr><td>Revenue</td><td>X</td><td>X</td><td>X</td><td>X</td></tr>
+          <tr><td>YoY Growth</td><td class="pos">X%</td><td class="pos">X%</td><td>X%</td><td>X%</td></tr>
+          <tr><td>Gross Margin</td><td>X%</td><td>X%</td><td>X%</td><td>X%</td></tr>
+          <tr><td>EBITDA</td><td>X</td><td>X</td><td>X</td><td>X</td></tr>
+          <tr><td>EBIT</td><td>X</td><td>X</td><td>X</td><td>X</td></tr>
+          <tr><td>Net Income</td><td>X</td><td>X</td><td>X</td><td>X</td></tr>
+          <tr><td>EPS (diluted)</td><td>X</td><td>X</td><td>X</td><td>X</td></tr>
+          <tr><td>FCF</td><td>X</td><td>X</td><td>X</td><td>X</td></tr>
+          <tr><td>EV/EBITDA</td><td>X</td><td>X</td><td>X</td><td>X</td></tr>
+          -->
+        </tbody>
+        <tfoot>
+          <tr><td>P/E (diluted)</td><td><!-- X --></td><td><!-- X --></td><td><!-- X --></td><td class="pos"><!-- X --></td></tr>
+        </tfoot>
+      </table>
+    </div>
+    <div>
+      <div class="ir-section-hd" style="margin-bottom:2mm">
+        <span class="ir-section-title">Price Performance (5Y)</span>
+        <span class="ir-section-sub">vs benchmark</span>
+      </div>
+      <div class="ir-chart">
+        <div class="ir-chart-title">
+          <span><!-- IRONCLAD:TICKER --> vs <!-- IRONCLAD:BENCHMARK --></span>
+          <div class="ir-chart-legend">
+            <div class="ir-legend-item"><div style="width:14px;height:2px;background:var(--accent)"></div><!-- IRONCLAD:TICKER --></div>
+            <div class="ir-legend-item"><div style="width:14px;height:1px;background:var(--ink-dim)"></div><!-- IRONCLAD:BENCHMARK --></div>
+          </div>
+        </div>
+        <!-- IRONCLAD:SVG_CHART — replace with real 5Y price SVG -->
+        <svg width="100%" height="80" viewBox="0 0 320 80" preserveAspectRatio="none" role="img" aria-label="5-year price chart placeholder">
+          <title>5-year price performance — to be populated</title>
+          <line x1="0" y1="20" x2="320" y2="20" stroke="var(--surface-rule)" stroke-width="0.5"/>
+          <line x1="0" y1="40" x2="320" y2="40" stroke="var(--surface-rule)" stroke-width="0.5"/>
+          <line x1="0" y1="60" x2="320" y2="60" stroke="var(--surface-rule)" stroke-width="0.5"/>
+          <text x="2" y="18" fill="var(--ink-dim)" font-size="5.5" font-family="'JetBrains Mono',monospace">+100%</text>
+          <text x="2" y="38" fill="var(--ink-dim)" font-size="5.5" font-family="'JetBrains Mono',monospace">+50%</text>
+          <text x="2" y="58" fill="var(--ink-dim)" font-size="5.5" font-family="'JetBrains Mono',monospace">0%</text>
+          <!-- placeholder lines — replace with real data polylines -->
+          <polyline points="0,58 64,55 128,52 192,48 256,44 320,40" fill="none" stroke="var(--ink-dim)" stroke-width="0.8" stroke-dasharray="3 2"/>
+          <polyline points="0,58 64,50 128,45 192,35 256,28 320,20" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+          <circle cx="320" cy="20" r="2" fill="var(--accent)"/>
+        </svg>
+        <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:7px;color:var(--ink-dim);margin-top:2px">
+          <span><!-- IRONCLAD:CHART_START --></span>
+          <span><!-- IRONCLAD:CHART_MID --></span>
+          <span><!-- IRONCLAD:CHART_END --></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-family:var(--font-mono);font-size:7.5px">
+          <div><span class="dim">Stock 5Y: </span><span class="<!-- IRONCLAD:PERF_CLASS -->"><!-- IRONCLAD:PERF_5Y --></span></div>
+          <div><span class="dim">Benchmark: </span><span class="<!-- IRONCLAD:BENCH_CLASS -->"><!-- IRONCLAD:BENCH_5Y --></span></div>
+          <div><span class="dim">Alpha: </span><span class="<!-- IRONCLAD:ALPHA_CLASS -->"><!-- IRONCLAD:ALPHA --></span></div>
+        </div>
+      </div>
+      <!-- ── Valuation build ── -->
+      <div class="ir-section-hd" style="margin-bottom:2mm">
+        <span class="ir-section-title">Price Target Build</span>
+        <span class="ir-section-sub">Blended methodology</span>
+      </div>
+      <!-- IRONCLAD:VALUATION_ROWS -->
+      <div class="ir-val-row ir-val-total">
+        <span class="ir-val-method">Blended Target</span>
+        <span class="ir-val-price"><!-- IRONCLAD:TARGET_PRICE --></span>
+        <span class="ir-val-weight">100%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ir-footer">
+    <div class="ir-footer-l"><!-- IRONCLAD:FIRM_NAME --> · <!-- IRONCLAD:REPORT_TYPE --> · <!-- IRONCLAD:TICKER --> · <!-- IRONCLAD:REPORT_DATE --></div>
+    <div class="ir-footer-r">Page 1</div>
+  </div>
+  <div class="ir-rule thin ir-footer-rule"></div>
+</div><!-- /page-1 -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 2 — Business Overview + Segments + Bull/Bear
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="ir-page" id="page-2">
+
+  <!-- ── BUSINESS OVERVIEW ────────────────────────────────────── -->
+  <div id="ir-overview" class="ir-section">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Business Model Overview</span>
+      <span class="ir-section-sub">How it makes money · Key relationships</span>
+    </div>
+    <p class="ir-body"><!-- IRONCLAD:OVERVIEW_P1 --></p>
+    <p class="ir-body"><!-- IRONCLAD:OVERVIEW_P2 --></p>
+    <p class="ir-body"><!-- IRONCLAD:OVERVIEW_P3 --></p>
+  </div>
+
+  <!-- ── SEGMENTS ─────────────────────────────────────────────── -->
+  <div id="ir-segments" class="ir-section avoid-break">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Revenue by Segment</span>
+      <span class="ir-section-sub"><!-- IRONCLAD:CURRENCY --> · <!-- IRONCLAD:SEG_NOTE --></span>
+    </div>
+    <table class="ir-table">
+      <thead>
+        <tr>
+          <th style="text-align:left">Segment</th>
+          <th><!-- IRONCLAD:FY_HIST1 --></th>
+          <th><!-- IRONCLAD:FY_HIST2 --></th>
+          <th><!-- IRONCLAD:FY_EST1 --></th>
+          <th><!-- IRONCLAD:FY_EST2 --></th>
+          <th>Mix %</th>
+          <th>YoY</th>
+          <th style="text-align:left">Commentary</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- IRONCLAD:SEGMENT_ROWS -->
+      </tbody>
+      <tfoot>
+        <tr><td>Total Revenue</td><td><!-- X --></td><td><!-- X --></td><td><!-- X --></td><td><!-- X --></td><td>100%</td><td class="pos"><!-- X% --></td><td></td></tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ── BULL vs BEAR ─────────────────────────────────────────── -->
+  <div id="ir-bull-bear" class="ir-section avoid-break">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Bull vs Bear</span>
+      <span class="ir-section-sub">Adversarial analysis · Pre-mortem</span>
+    </div>
+    <div class="ir-two-col">
+      <div class="ir-bull-card">
+        <div class="ir-bull-head">▲ Bull Case</div>
+        <!-- IRONCLAD:BULL_POINTS —
+        <div class="ir-bull-point"><span class="ir-bull-dot">●</span><div><strong>Title:</strong> Description</div></div>
+        -->
+      </div>
+      <div class="ir-bear-card">
+        <div class="ir-bear-head">▼ Bear Case</div>
+        <!-- IRONCLAD:BEAR_POINTS —
+        <div class="ir-bear-point"><span class="ir-bear-dot">●</span><div><strong>Title:</strong> Description</div></div>
+        -->
+      </div>
+    </div>
+    <div class="ir-callout">
+      <div class="ir-callout-label">Contrarian View</div>
+      <div class="ir-callout-text"><!-- IRONCLAD:CONTRARIAN --></div>
+    </div>
+    <div class="ir-callout" style="background:var(--alert-bg);border-left-color:var(--gold)">
+      <div class="ir-callout-label" style="color:var(--alert)">Pre-Mortem — What kills this thesis?</div>
+      <div class="ir-callout-text" style="color:var(--alert)"><!-- IRONCLAD:PREMORTEM --></div>
+    </div>
+  </div>
+
+  <div class="ir-footer">
+    <div class="ir-footer-l"><!-- IRONCLAD:FIRM_NAME --> · <!-- IRONCLAD:TICKER --> · <!-- IRONCLAD:REPORT_DATE --></div>
+    <div class="ir-footer-r">Page 2</div>
+  </div>
+  <div class="ir-rule thin ir-footer-rule"></div>
+</div><!-- /page-2 -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 3 — Competitive Advantages + Supply Chain + Management
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="ir-page" id="page-3">
+
+  <!-- ── COMPETITIVE ADVANTAGES ──────────────────────────────── -->
+  <div id="ir-competitive" class="ir-section">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Competitive Advantages &amp; Moat</span>
+      <span class="ir-section-sub">Economic moats · Bargaining power</span>
+    </div>
+    <p class="ir-body"><!-- IRONCLAD:MOAT_P1 --></p>
+    <p class="ir-body"><!-- IRONCLAD:MOAT_P2 --></p>
+    <div class="ir-two-col" style="margin-top:2mm">
+      <div>
+        <!-- IRONCLAD:MOAT_ADVANTAGES -->
+      </div>
+      <div>
+        <!-- IRONCLAD:MOAT_RISKS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SUPPLY CHAIN ─────────────────────────────────────────── -->
+  <div id="ir-supply" class="ir-section avoid-break">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Supply Chain Map</span>
+      <span class="ir-section-sub">Upstream → downstream · Named participants</span>
+    </div>
+    <div class="ir-supply-chain">
+      <!-- IRONCLAD:SUPPLY_CHAIN_STAGES
+      <div class="ir-sc-stage">
+        <div class="ir-sc-head">Stage Label</div>
+        <div class="ir-sc-item key">Company Name</div>
+        <div class="ir-sc-item">Other participant</div>
+      </div>
+      <div class="ir-sc-arrow">→</div>
+      <div class="ir-sc-stage highlight"> ... (highlighted = the subject company) ... </div>
+      -->
+    </div>
+    <p class="ir-body" style="margin-top:2mm"><!-- IRONCLAD:SUPPLY_CHAIN_NOTES --></p>
+  </div>
+
+  <!-- ── MANAGEMENT ────────────────────────────────────────────── -->
+  <div id="ir-management" class="ir-section">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Management Assessment</span>
+      <span class="ir-section-sub">Track record · Capital allocation · Red flags</span>
+    </div>
+    <!-- IRONCLAD:MGMT_CARDS
+    <div class="ir-mgmt-card">
+      <div class="ir-mgmt-name">Name</div>
+      <div class="ir-mgmt-role">Role · Tenure · Ownership</div>
+      <div class="ir-mgmt-detail">Assessment text</div>
+    </div>
+    -->
+  </div>
+
+  <div class="ir-footer">
+    <div class="ir-footer-l"><!-- IRONCLAD:FIRM_NAME --> · <!-- IRONCLAD:TICKER --> · <!-- IRONCLAD:REPORT_DATE --></div>
+    <div class="ir-footer-r">Page 3</div>
+  </div>
+  <div class="ir-rule thin ir-footer-rule"></div>
+</div><!-- /page-3 -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 4 — Earnings + Comps + Forward Projections
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="ir-page" id="page-4">
+
+  <!-- ── LATEST EARNINGS ──────────────────────────────────────── -->
+  <div id="ir-earnings" class="ir-section">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Latest Earnings Analysis</span>
+      <span class="ir-section-sub"><!-- IRONCLAD:EARNINGS_PERIOD --> results</span>
+    </div>
+    <div class="ir-two-col">
+      <div>
+        <table class="ir-table">
+          <thead><tr><th style="text-align:left">Metric</th><th>Actual</th><th>Consensus</th><th>Beat/Miss</th></tr></thead>
+          <tbody>
+            <!-- IRONCLAD:EARNINGS_ROWS -->
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <p class="ir-body"><!-- IRONCLAD:EARNINGS_COMMENTARY --></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── COMPARABLE COMPANIES ─────────────────────────────────── -->
+  <div id="ir-comps" class="ir-section avoid-break">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Comparable Companies</span>
+      <span class="ir-section-sub">Global peers · As of <!-- IRONCLAD:REPORT_DATE --></span>
+    </div>
+    <table class="ir-table">
+      <thead>
+        <tr>
+          <th style="text-align:left">Company</th>
+          <th style="text-align:left">Ticker</th>
+          <th>Mkt Cap (USD)</th>
+          <th>EV/Sales</th>
+          <th>EV/EBIT</th>
+          <th>P/E</th>
+          <th>Div Yield</th>
+          <th>5Y ROE Avg</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- IRONCLAD:COMPS_ROWS
+        <tr style="background:var(--accent-wash)"><td><strong>Subject Co</strong></td><td>XXX</td><td>XXXbn</td><td>Xx</td><td>Xx</td><td>Xx</td><td>X.X%</td><td>X.X%</td></tr>
+        <tr><td>Peer 1</td><td>XXX</td>...</tr>
+        -->
+      </tbody>
+      <tfoot>
+        <tr><td>Peer median</td><td>—</td><td>—</td><td><!-- X --></td><td><!-- X --></td><td><!-- X --></td><td><!-- X% --></td><td><!-- X% --></td></tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ── FORWARD PROJECTIONS ──────────────────────────────────── -->
+  <div id="ir-forward" class="ir-section avoid-break">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Forward Projections</span>
+      <span class="ir-section-sub">EPS estimates <!-- IRONCLAD:FY_EST1 -->–<!-- IRONCLAD:FY_EST3 --> · <!-- IRONCLAD:CURRENCY --></span>
+    </div>
+    <div class="ir-two-col">
+      <table class="ir-table">
+        <thead>
+          <tr>
+            <th style="text-align:left">Driver</th>
+            <th><!-- IRONCLAD:FY_EST1 --></th>
+            <th><!-- IRONCLAD:FY_EST2 --></th>
+            <th><!-- IRONCLAD:FY_EST3 --></th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- IRONCLAD:FORWARD_ROWS -->
+        </tbody>
+        <tfoot>
+          <tr><td>EPS (diluted)</td><td><!-- X --></td><td><!-- X --></td><td><!-- X --></td></tr>
+        </tfoot>
+      </table>
+      <div>
+        <p class="ir-body"><!-- IRONCLAD:FORWARD_COMMENTARY --></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="ir-footer">
+    <div class="ir-footer-l"><!-- IRONCLAD:FIRM_NAME --> · <!-- IRONCLAD:TICKER --> · <!-- IRONCLAD:REPORT_DATE --></div>
+    <div class="ir-footer-r">Page 4</div>
+  </div>
+  <div class="ir-rule thin ir-footer-rule"></div>
+</div><!-- /page-4 -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 5 — Red Flags + Management Questions + Devil's Advocate
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="ir-page" id="page-5">
+
+  <!-- ── RED FLAGS ────────────────────────────────────────────── -->
+  <div id="ir-red-flags" class="ir-section">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Red Flags &amp; Forensic Accounting</span>
+      <span class="ir-section-sub">Revenue recognition · Balance sheet risks · Related parties</span>
+    </div>
+    <!-- IRONCLAD:RED_FLAGS
+    <div class="ir-flag">
+      <span class="ir-flag-icon">⚑</span>
+      <div class="ir-flag-text"><strong>Flag title:</strong> Description of concern.</div>
+    </div>
+    -->
+  </div>
+
+  <!-- ── MANAGEMENT QUESTIONS ─────────────────────────────────── -->
+  <div id="ir-questions" class="ir-section avoid-break">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">15 Questions for Management</span>
+      <span class="ir-section-sub">Ordered by information value</span>
+    </div>
+    <!-- IRONCLAD:MGMT_QUESTIONS
+    <div class="ir-question">
+      <span class="ir-q-num">01.</span>
+      <div class="ir-q-text"><strong>Topic:</strong> Question text here.</div>
+    </div>
+    -->
+  </div>
+
+  <!-- ── DEVIL'S ADVOCATE ──────────────────────────────────────── -->
+  <div id="ir-devils" class="ir-section">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">Devil's Advocate — Short Case</span>
+      <span class="ir-section-sub">Skeptical short-seller perspective</span>
+    </div>
+    <div class="ir-bear-card">
+      <div class="ir-bear-head">▼ Dismantling the Bull Case</div>
+      <!-- IRONCLAD:DEVILS_POINTS -->
+    </div>
+  </div>
+
+  <!-- ── REFERENCES ────────────────────────────────────────────── -->
+  <div id="ir-refs" class="ir-section avoid-break">
+    <div class="ir-section-hd">
+      <span class="ir-section-title">References</span>
+      <span class="ir-section-sub">All cited sources · Retrieval date: <!-- IRONCLAD:REPORT_DATE --></span>
+    </div>
+    <!-- IRONCLAD:REFERENCES
+    <div class="ir-ref">[1] Author/Source. <em>Title</em>. Publisher, Date. URL: <a href="#">link</a></div>
+    -->
+  </div>
+
+  <!-- ── DISCLAIMER ────────────────────────────────────────────── -->
+  <div id="ir-footer">
+    <div class="ir-disc">
+      <!-- IRONCLAD:DISCLAIMER -->
+      This report has been prepared for informational purposes only and does not constitute an offer to buy or sell any security. The views expressed represent the analyst's own assessment based on publicly available information. Past performance is not indicative of future results. Investors should seek independent financial advice before making investment decisions. The analyst(s) confirm that the views expressed accurately reflect their personal views and that no part of their compensation was, is, or will be directly or indirectly related to the specific recommendation or views expressed herein.
+    </div>
+    <div class="ir-footer" style="position:relative;bottom:auto;left:auto;right:auto;margin-top:3mm">
+      <div class="ir-footer-l"><!-- IRONCLAD:FIRM_NAME --> · <!-- IRONCLAD:REPORT_TYPE --> · <!-- IRONCLAD:TICKER --> · <!-- IRONCLAD:REPORT_DATE --></div>
+      <div class="ir-footer-r">Page 5 of 5</div>
+    </div>
+  </div>
+
+  <div class="ir-rule thin ir-footer-rule"></div>
+</div><!-- /page-5 -->
+
+</body>
+</html>

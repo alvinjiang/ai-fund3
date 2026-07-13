@@ -1,0 +1,3 @@
+# Management
+
+For the company, give me a brief assessment of the CEO and key executives: 1) Track record: What have they actually built, turned around, or delivered in prior roles? Quantify where possible. 2) Tenure & insider ownership — How long in the role, and how much skin in the game? 3) Capital allocation history — Do they reinvest wisely, acquire disciplined, or destroy value? ROE/ROIC trend under their watch. 4) Red flags — Related-party transactions, excessive comp, frequent strategy pivots, or promotional behavior. 5) Founder vs. professional manager — Which archetype, and what does that imply for this stage of the business?
