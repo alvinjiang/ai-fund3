@@ -125,6 +125,29 @@ produced `specs/SPEC-*.md`; no code written.)
   onto severity by code — it is never a stored state. (Closes the naming drift flagged in
   the 0.3 review.)
 
+**From SPEC-MONITORING (4.1) — the deferred pgvector decision:**
+
+- **pgvector: DROPPED** (decision made here, per design/00's "defer to Phase 4"). Its only
+  v3 consumer would be news dedup/near-dup; v3 judges relevance with the tripwire-scoring
+  call (against authored conditions, not semantic similarity), so embeddings would be pure
+  cost (~50–200 provider calls/day) with no reader, plus an extension + dimension migration
+  to carry. Replacement is deterministic: normalized URL + content hash (both ported
+  verbatim from v2 `news/dedup.py`) + SimHash near-dup clustering.
+  **Reversal is measured, not vibes:** the monitor role already flags duplicate stories, so
+  `dedup_miss_rate` (model-flagged dups the code failed to cluster) is logged per tick. If
+  it exceeds 10% over 30 days at ≥20 active tickers: tune SimHash → try `pg_trgm` → only
+  then adopt pgvector (additive migration; the column name stays reserved).
+
+**Cross-spec risks flagged (SPEC-INITIATION 3.1, SPEC-MONITORING 4.1):**
+
+- The specs from 3.1 onward carry a "Preliminary — pending PM gates" section listing the
+  interface assumptions PM gates 2.4/3.3 could invalidate (gate list, sequential verify
+  passes, registration at the finalizer only, rotation policy, escalation caps, trust
+  tiers). Each is config-driven so a gate failure is doctrine/config work, not a rewrite.
+- **Escalation caps and news source trust tiers are the anti-prompt-injection levers** for
+  the one place an LLM decides what the PM sees and what the fund spends money on (news →
+  `event_analysis`). Both are guesses until the first month of live monitoring.
+
 ## 2026-07-12 — Phase 0.3 complete (role-prompt review)
 
 Reviewed all 8 role prompts (`doctrine/roles/*.md`) against `core.md` for terminology
