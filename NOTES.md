@@ -148,6 +148,38 @@ produced `specs/SPEC-*.md`; no code written.)
   the one place an LLM decides what the PM sees and what the fund spends money on (news →
   `event_analysis`). Both are guesses until the first month of live monitoring.
 
+**Amendments later specs make to earlier ones** (all additive; fold them in if the earlier
+spec has not been built yet, else they are one-line migrations):
+
+- SPEC-CORE: `StageRole` gains `PM_QUERY` (needs a new `doctrine/roles/pm_query.md` — text
+  proposed in SPEC-CORE §10, **PM approval required**, since doctrine is PM-owned); `runs`
+  gains a partial unique index on `(coverage_id, type, trigger_ref)` so a scheduler re-fire
+  cannot double-spawn.
+- SPEC-INITIATION: `corrections` gains a unique `idempotency_key` (without it, a retried
+  verifier stage double-charges another house's corrections-received rate — i.e. it would
+  corrupt the earliest quality signal in the system); `tripwires.yaml` gains optional
+  `keywords` (used by SPEC-MONITORING for keyword corroboration).
+- SPEC-ADAPTER: new core-owned tables `mm_channels` / `mm_posts`; the outbox is consumed
+  **through the core API** (`POST /outbox/claim|ack|nack`) rather than by the adapter
+  touching Postgres — core stays the only DB writer and the adapter needs no DB credentials.
+- SPEC-TRACKREC: `predictions` gains `direction` + `pinned_price` (code-written at
+  registration, so scoring never re-derives what a prediction meant); `events` gains
+  `pm_rating`; new `house_metric_snapshots` table.
+
+**From SPEC-DISTILLATION (7.1) — needs an operator decision before BUILD:**
+
+- **Where doctrine lives.** Recommended: a **standalone doctrine git repo outside the deploy
+  tree** (`/srv/ai-fund/doctrine`), seeded at bootstrap from the repo-tracked `doctrine/`.
+  Reason: an approved amendment is fund state, and a `git reset` in the deploy tree must
+  never clobber it (the same rule as operator config). The alternative (doctrine stays in
+  this repo; distillation pushes a branch and the PM merges a PR) is supported via
+  `fund.yaml doctrine.mode: B`. Pick one before building 7.1.
+- **7.1 BUILD was deliberately not done** in this SPEC session (PROMPTS marks it SPEC+BUILD).
+  The spec's §6 gates — meta firewall, diff-scope, and the **citation gate** (every proposed
+  doctrine rule must cite an incident row that actually exists, in-window) — are the
+  acceptance criteria: doctrine is what every future run obeys, so a hallucinated
+  justification would propagate into every report the fund ever writes.
+
 ## 2026-07-12 — Phase 0.3 complete (role-prompt review)
 
 Reviewed all 8 role prompts (`doctrine/roles/*.md`) against `core.md` for terminology
