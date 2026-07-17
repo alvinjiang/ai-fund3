@@ -186,7 +186,7 @@ _ENTRIES: dict[tuple[Any, Action], tuple[CoverageState, str, list[str]]] = {
     ),
 }
 
-_DECIDE_ACTIONS = {Action.DECIDE_ACTIVE, Action.DECIDE_WATCH, Action.DECIDE_REJECT}
+DECIDE_ACTIONS = {Action.DECIDE_ACTIVE, Action.DECIDE_WATCH, Action.DECIDE_REJECT}
 
 
 def _check_guards(from_state: Any, action: Action, ctx: TransitionContext) -> None:
@@ -208,7 +208,7 @@ def _check_guards(from_state: Any, action: Action, ctx: TransitionContext) -> No
             raise IllegalTransition(from_state, action, "a meta house cannot be lead")
         if not ctx.new_house_assignable:
             raise IllegalTransition(from_state, action, "lead house must be assignable")
-    elif action in _DECIDE_ACTIONS:
+    elif action in DECIDE_ACTIONS:
         if not ctx.gate_open:
             raise IllegalTransition(from_state, action, "decide requires an open gate")
         if not ctx.answer_in_allowed:

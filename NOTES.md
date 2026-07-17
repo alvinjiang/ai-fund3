@@ -316,3 +316,54 @@ inconsistencies, no action now):
    vocabulary (`thesis`/`info`) — reconcile in SPEC-MONITORING (Phase 4).
 
 Next: Phase 1.1 SPEC — domain schema & coverage state machine (reasoning-model session).
+
+## 2026-07-18 — Phase 1.3 (spec-domain) BUILD complete — SPEC-DOMAIN implemented
+
+Implemented `specs/SPEC-DOMAIN.md` on branch `spec-domain`, TDD from the spec's §9 test
+plan. 286 unit tests (SQLite + pure functions) + 8 integration tests (Postgres via
+testcontainers) green; ruff clean.
+
+- **Domain (pure):** `enums` (§3 + §12 `PM_QUERY`), `dossier_slug`, `contributors`,
+  `coverage_sm` (§5: every legal transition, the exhaustive illegal cross-product, guards,
+  side effects), `run_sm` + stage SM (§6: transient `running→queued` re-entry guarded by
+  `attempts<max_attempts`, `waiting_pm` carries an `open_pm_gate` side effect, terminal
+  statuses release the lock + emit `run.finished`).
+- **Schema:** `core/db/types` (Numeric money path — `Money/Price/Cost/Prob`; cross-dialect
+  `JsonType` → JSONB on Postgres / JSON on SQLite; `utc_now`), `base` (naming convention +
+  `TimestampMixin`), and `models` — all 35 tables of §4 with every CHECK/FK/unique
+  constraint, the §12 amendments folded in (runs partial `uq_runs_trigger_ref`, corrections
+  `idempotency_key`, predictions `direction`/`pinned_price`, events `pm_rating*`,
+  `house_metric_snapshots`, `mm_channels`, `mm_posts`), and the §4.25 ported v2 tables
+  (`Float`→`Numeric`, `String(36)`→`Uuid`, MM columns nullable).
+- **Repos:** coverage (lifecycle chain — transition+audit+outbox in one tx, `request_id`
+  linkage (invariant 5), rollback atomicity, slug stability, lead history, level
+  supersession, contributor resolution); runs (per-ticker lock held through `waiting_pm`,
+  `monitor_tick` takes no lock, `finish_run` releases + emits, gate open/answer idempotent);
+  predictions (idempotent registration keyed on the *stage id*, immutability of everything
+  but scored/superseded columns, NULL confidence stays NULL); events (`dedupe_key`
+  idempotency); outbox (publish/consume/ack/nack, lease + backoff); `queue` (`claim_stage`
+  `FOR UPDATE SKIP LOCKED` + dependency `EXISTS` gating, heartbeat, `complete`/`fail` with
+  per-attempt cost rollup, `reap_expired`).
+- **Infra:** minimal `core/settings` (DATABASE_URL + ARTIFACTS_DIR; SPEC-CORE expands),
+  `core/db/session` factory (no `scoped_session` global), alembic baseline (`0001` via
+  `metadata.create_all`, `env.py` reads URL from settings, `alembic.ini` at root). §9.4
+  fakes: `FakeClock`, `FakeHarnessDriver` (+ minimal `HarnessDriver` Protocol), and
+  `make_house/coverage/run/stage` factories.
+
+**Decisions/fixes worth flagging:**
+- `server_default=func.now()` (not `text("now()")`) everywhere — `func.now()` compiles to
+  `CURRENT_TIMESTAMP` on SQLite and `now()` on Postgres; `text("now()")` failed on SQLite.
+- `doctrine_versions.distillation_run_id` FK marked `use_alter=True` to break the
+  `runs ↔ doctrine_versions` FK cycle (otherwise SQLAlchemy can't sort tables for
+  create_all/drop_all and `alembic check` drifts).
+- Removed the redundant `UniqueConstraint` on `house_metric_snapshots` — the composite PK
+  already enforces uniqueness, and the duplicate showed up as drift in `alembic check`.
+- Integration suite is opt-in (`pytest -m integration`); a conftest hook marks+skips it
+  otherwise so the unit suite stays fast and service-free. `testcontainers[postgres]` added
+  to dev deps (Docker; `postgres:16-alpine`).
+- One SQLite unit-test caveat: SQLite returns datetimes naive on read-back, so tests that
+  compare a Python-aware datetime to a refreshed one normalize first (the `heartbeat` test).
+- Cost rollup counts failed attempts (invariant 3); `stage_attempts` is a table, not a
+  counter (v2 cost-drift lesson).
+
+Next: Phase 1.3 (spec-core) — orchestrator + config + core API + CLI (`SPEC-CORE.md`).

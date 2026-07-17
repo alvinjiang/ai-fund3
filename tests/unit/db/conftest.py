@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
+import core.db.models  # noqa: F401  (register every table on Base.metadata before create_all)
 from core.db.base import Base
 
 

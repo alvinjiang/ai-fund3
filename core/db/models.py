@@ -538,7 +538,9 @@ class DoctrineVersion(Base):
     label: Mapped[str] = mapped_column(String(32), nullable=False)
     approved_by: Mapped[str | None] = mapped_column(String(64))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    distillation_run_id: Mapped[UUID | None] = mapped_column(Uuid, ForeignKey("runs.id"))
+    distillation_run_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("runs.id", use_alter=True)
+    )
     notes: Mapped[str | None] = mapped_column(Text)
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
@@ -623,7 +625,9 @@ class HouseBudgetDay(Base):
 
 
 class HouseMetricSnapshot(Base):
-    # §12 amendment (SPEC-TRACKREC §3): per-house metric views.
+    # §12 amendment (SPEC-TRACKREC §3): per-house metric views. (house, as_of, scope) is
+    # the composite PK — that already enforces uniqueness, so no extra UniqueConstraint
+    # (a duplicate one shows up as drift in `alembic check`).
     __tablename__ = "house_metric_snapshots"
     house: Mapped[str] = mapped_column(
         String(32), ForeignKey("houses.key", ondelete="RESTRICT"), primary_key=True
@@ -633,9 +637,6 @@ class HouseMetricSnapshot(Base):
     metrics: Mapped[Any] = mapped_column(JsonType, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    __table_args__ = (
-        UniqueConstraint("house", "as_of", "scope", name="uq_house_metric_snapshots"),
     )
 
 
