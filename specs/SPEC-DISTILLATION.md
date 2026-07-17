@@ -63,8 +63,15 @@ Doctrine is **data the fund learns**, not code — and an approved amendment mus
 Mode A is recommended: the PM can amend doctrine without a code deploy, a deploy can never
 clobber an approved amendment, and `git archive <sha> doctrine/` (SPEC-RUNNER §4.3, the
 version-pinned read-only mount) works identically in both. Mode B exists because a PM who
-wants GitHub PR review for doctrine should have it. **The mode must be chosen before BUILD**;
-everything else in this spec is identical either way.
+wants GitHub PR review for doctrine should have it.
+
+**DECIDED (PM, 2026-07-18): Mode A.** The standalone repo is **instantiated by
+`fund bootstrap`** (SPEC-CORE §6), not by hand: if `settings.doctrine_repo_path` does not
+exist, bootstrap runs `git init --bare`, clones the working checkout to
+`settings.doctrine_dir`, copies the app repo's `doctrine/` tree in, commits
+(`seed doctrine v1 from ai-fund3@<sha>`), and registers the `doctrine_versions` row.
+Idempotent: an existing repo is verified, never re-seeded (re-seeding after amendments
+would clobber fund state; the repo-tracked `doctrine/` remains the *seed*, nothing more).
 
 ---
 

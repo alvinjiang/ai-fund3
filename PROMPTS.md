@@ -177,10 +177,10 @@ design adjusts here cheaply. **Do not reorder.**
 > adjustment factors + dividends, halt signal, earnings-calendar tiers). Implement
 > `specs/SPEC-MARKETDATA.md`: port v2 `/home/alvin/aicode/ai-fund/data_sources/`
 > (router, fx, freshness, exchange_registry; jquants + sec_edgar) behind the specced
-> endpoints as a localhost service reachable from sandboxes. ⚠️ Operator decision
-> before the 2.4 pilot: J-Quants paid plan vs `yfinance`-primary for JP (spec §3.3 —
-> the free plan's 12-week delay fails every JP price-pin gate). Full monitor
-> integration comes in Phase 4; this step serves the pipeline's price needs.
+> endpoints as a localhost service reachable from sandboxes. JP provider order
+> DECIDED (PM 2026-07-18): `yfinance`-primary, J-Quants free plan as delayed
+> cross-check (spec §3.3). Full monitor integration comes in Phase 4; this step
+> serves the pipeline's price needs.
 
 ### 2.4 ⛔ PM GATE — Pilot initiation
 

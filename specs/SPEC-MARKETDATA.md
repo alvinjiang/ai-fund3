@@ -175,8 +175,15 @@ stats. Consumed by `fund checkconfig`.
    JP (the Yakult bar). Rule: `checkconfig --strict` **FAILs** if any JP coverage is
    `active`/`watch` while the probed J-Quants plan delay exceeds `max_price_age_days`,
    unless `fund.yaml exchanges.tse.price_providers` puts `yfinance` first (then J-Quants
-   is the cross-check source). The operator chooses paid-plan-primary or
-   yfinance-primary **before** the pilot, knowingly.
+   is the cross-check source).
+   **DECIDED (PM, 2026-07-18): yfinance-primary** — no paid J-Quants plan. So:
+   `tse.price_providers: [yfinance, jquants]` is the shipped default. Consequence,
+   stated honestly: for *fresh* JP dates the free-plan J-Quants has no bar yet, so the
+   cross-check responds `{available: false, reason: "provider_delay"}` and a fresh JP
+   pin is **single-source**; cross-checks work for dates the free window covers
+   (> ~12 weeks old). The verifier's fresh re-pin should note the single-source status
+   rather than fake a second source; a paid plan (or a second live JP provider) later
+   is a config flip, no code change.
 4. **Symbology lives here only.** v2 keyed by ticker *suffix* (`2267.T`); v3 speaks
    `(exchange, ticker)`. The suffix/local-code derivation (`yfinance_suffix`, J-Quants
    local code) is private to this service; nothing else may construct a provider symbol.

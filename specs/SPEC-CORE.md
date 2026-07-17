@@ -506,7 +506,10 @@ fund predictions list [--status open]
 fund events list [--coverage tse_2267]   fund events rate <id> up|down
 fund cost [--by house] [--since 7d]
 fund checkconfig [--strict]              fund config reload
-fund bootstrap                           # upsert houses, seed doctrine_versions row, verify dossier repo
+fund bootstrap                           # upsert houses; create+seed the standalone doctrine repo
+                                         #   (mode A, SPEC-DISTILLATION §3) if absent — idempotent,
+                                         #   never re-seeds an existing one; seed doctrine_versions
+                                         #   row; verify dossier repo
 fund health
 ```
 

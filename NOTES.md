@@ -1,5 +1,29 @@
 # NOTES
 
+## 2026-07-18 — PM decisions recorded; docs/NEXT_STEPS.md created
+
+Three PM answers recorded in the owning specs (same Fable session as below):
+
+- **JP price providers: yfinance-primary** (no paid J-Quants plan) → SPEC-MARKETDATA
+  §3.3 updated; fresh JP pins are single-source (free-plan J-Quants covers only dates
+  > ~12 weeks old as a cross-check) — stated, not hidden. PROMPTS 2.3 note updated.
+- **Doctrine repo: Mode A** (standalone, outside the deploy tree) → SPEC-DISTILLATION
+  §3; instantiation is `fund bootstrap`'s job (SPEC-CORE §6 updated: creates+seeds the
+  repo if absent, idempotent, never re-seeds an existing one — no manual git surgery).
+- **First-house (2.1)**: nothing to decide yet; context and the selection rule
+  (authenticate fastest; prefer parseable usage output) written into docs/NEXT_STEPS.md
+  §Open actions.
+
+**`docs/NEXT_STEPS.md` (new)** is the PM's standing reference: status, locked
+decisions, open PM/operator actions in order, the execution sequence with model tiers,
+and the ranked Fable checkpoints (PR-review 1.3/2.2 branches, gate 2.4/3.3 triage,
+spec contradictions during BUILD, first distillation diff, pre-cutover). Keep it
+updated as phases complete.
+
+Also noted: the 1.3 BUILD session started on branch `spec-domain` today; an earlier
+commit from this session accidentally swept its uncommitted files and was immediately
+redone clean (5e15a14) — the builder's working tree was restored untouched.
+
 ## 2026-07-18 — Fable derisking session: SPEC-MARKETDATA, doctrine diffs staged, review checklists
 
 Front-loaded the remaining strong-model work before BUILD begins (PM: "derisk or decide
