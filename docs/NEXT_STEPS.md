@@ -33,18 +33,26 @@ Companions: `PROMPTS.md` (the execution file itself), `docs/BUILD_REVIEW_CHECKLI
 2. **When 1.3 lands:** populate `/etc/ai-fund/` (`.env`, `houses.yaml`, `fund.yaml`,
    `pricing.yaml` from the `config/*.example` templates) and run
    `fund checkconfig --strict`, then `fund bootstrap`.
-3. **Phase 2.1 — the first-house decision** (context, since you asked): Phase 2
-   deliberately proves the whole two-tier bet with **one** model house end-to-end
-   before anything else is built. The "house" is the provider whose *agentic CLI*
-   (the harness) runs the heavy research stages in the sandbox. You need: an API
-   account with **either** OpenAI (→ Codex CLI) **or** Google (→ Gemini CLI),
-   authenticated **on this host, non-interactively**. There is nothing to decide
-   today — the rule is pragmatic: whichever of the two you can authenticate fastest
-   becomes `fund.yaml first_house`. If both work, run `fund harness check` on each
-   and prefer the one with a usable non-interactive mode **and parseable usage
-   output** — cost capture is the harder half of harness ops (SPEC-RUNNER §9), and a
-   house whose spend can only be *estimated* is a bad foundation. The other houses
-   (DeepSeek/GLM/Qwen via generic-cli) join in Phase 3.
+3. **Phase 2.1 — houses and keys** (PM 2026-07-18: will run **multiple API keys
+   across providers**, depending on availability/remaining credits — this fits the
+   design as-is): list every house whose key works in `houses.yaml`
+   (`enabled: true`); a house is disabled by config, never deleted. Rules that
+   still hold:
+   - **Pilot lead = the best harness citizen**, not the biggest credit balance:
+     run `fund harness check` across all enabled houses and prefer a usable
+     non-interactive mode **and parseable usage output** — cost capture is the
+     harder half of harness ops (SPEC-RUNNER §9); a house whose spend can only be
+     *estimated* is a bad foundation. Set it as `fund.yaml first_house`.
+   - With ≥2 live houses, **skip the single-house 2.4 fallback**
+     (`--allow-single-house`): run the pilot's verify pass with a *different*
+     house — cross-house verification is where the quality comes from, and it
+     makes 2.4 a partial rehearsal of 3.3.
+   - **Credit exhaustion mid-run** is already a handled failure mode: stages fail
+     retryably → the run re-queues → after `max_attempts` it fails *visibly* to
+     the desk, with the dead attempts' costs recorded. Still, run
+     `fund harness check` before initiating so a dead key is caught before it
+     costs a stage. Per-house budgets/caps are independent, so one exhausted
+     house stalls only its own stages.
 4. **Phase 2.4:** choose the pilot ticker (JP name recommended — the Yakult bar is
    JP; note fresh JP pins are single-source under yfinance-primary) and grade the
    pilot against the Yakult standard.
@@ -72,12 +80,21 @@ Companions: `PROMPTS.md` (the execution file itself), `docs/BUILD_REVIEW_CHECKLI
 
 ## Fable checkpoints (if you get access again, in priority order)
 
+Review timing rule: reviews happen **per completed BUILD branch, before merge** — not
+at phase ends. 1.4 (infra port, Haiku) needs no Fable review. The concrete moments:
+after `spec-domain` completes; after `spec-core` completes; and after 2.2+2.3, the
+**pre-2.4 whole-stack review** — the last cheap moment before real money runs.
+**If access allows only one review, take the pre-2.4 one** (it covers the whole money
+path: domain + core + runner + marketdata). If access is regular, review each branch
+as it lands — foundation bugs get costlier with every layer built on top.
+
 1. **PR review of the 1.3 branches** (spec-domain, spec-core) — the state machines,
    queue, and immutability rules everything else stands on. Say: *"review branch X
    against SPEC-Y and docs/BUILD_REVIEW_CHECKLISTS.md."* (`/code-review ultra` is the
    heavyweight alternative any session can be asked to set up.)
-2. **PR review of 2.2 (runner)** — sandbox/egress/secrets/gates; the highest-exposure
-   surface.
+2. **PR review of 2.2 (runner) and 2.3 (marketdata), then the pre-2.4 stack pass** —
+   sandbox/egress/secrets/gates; the highest-exposure surface, reviewed before the
+   pilot spends money.
 3. **Gate 2.4 (and 3.3) failure triage** — when the pilot misses the Yakult bar:
    classify doctrine vs prompt vs gate-config vs code, and write the fixes as the
    first doctrine lessons. This is the highest-judgment moment in the plan.
