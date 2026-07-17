@@ -170,7 +170,6 @@ class GateKind(StrEnum):
     LEAD_CHANGE = "lead_change"
     DOCTRINE_AMENDMENT = "doctrine_amendment"
     BUDGET_CAP = "budget_cap"
-    REVIEW_ESCALATION = "review_escalation"
 
 class ActorType(StrEnum):
     PM = "pm"
@@ -633,8 +632,9 @@ class Disagreement(Base):
     challenger_position: Text NOT NULL
     key_numbers: JsonType | None
     resolves_if: Text | None            # what evidence would settle it
-    pm_rating: SmallInteger | None      # +1 / -1 (PM 👍/👎), SPEC-TRACKREC
     created_at
+    # NOTE: no pm_rating here — v1's PM 👍/👎 rating lives on events (SPEC-TRACKREC §8);
+    # rating disagreements directly would be an additive migration if ever wanted.
 ```
 
 ### 4.16 `events` — normalized observations
@@ -945,6 +945,9 @@ proposed ──initiate──▶ initiating ──finalizer_done──▶ decisi
  re-propose ◀── exited ◀──exit── active ◀──promote── watch ◀──demote── active ─┘
  re-propose ◀── rejected            │                  │
                                     └──────exit────────┴──▶ exited
+
+additional edges: decision_pending ──cancel──▶ failed        (run cancelled at the gate)
+                  proposed | failed ──withdraw──▶ rejected   (PM abandons the proposal)
 ```
 
 ### Transition table (complete — no other transition is legal)
@@ -955,7 +958,9 @@ proposed ──initiate──▶ initiating ──finalizer_done──▶ decisi
 | 2 | `proposed` | `initiating` | `start_initiation` | RUN | an `initiation` run for this coverage moved to `running`; `lead_house` set | set `coverage.lead_house` from run params; acquire coverage lock |
 | 3 | `initiating` | `decision_pending` | `initiation_delivered` | RUN | run status `waiting_pm` with an open `initiation_decision` gate | open gate; outbox `gate.opened` (adapter posts PDF + summary + decision prompt) |
 | 4 | `initiating` | `failed` | `initiation_failed` | RUN | run terminal `failed` or `cancelled` | release lock; outbox `run.finished` (desk alert) |
+| 4b | `decision_pending` | `failed` | `initiation_cancelled` | PM / RUN | the initiation run was cancelled while `waiting_pm` (PM cancels instead of deciding) | cancel the open gate (`state='cancelled'`); release lock; branch retained, not merged; outbox `run.finished` (desk alert). Without this edge a cancelled gate would strand the coverage in `decision_pending` forever (`decide` requires an open gate) |
 | 5 | `failed` | `initiating` | `retry_initiation` | PM | — | new `initiation` run (old dossier branch retained) |
+| 5b | `proposed` / `failed` | `rejected` | `withdraw` | PM | — | mandatory note; no branch merge (there may be no run at all); a withdrawn ticker can be re-proposed later via row 13 |
 | 6 | `decision_pending` | `active` | `decide:active` | PM | gate open; answer in `allowed_answers` | answer gate; merge run branch to dossier main; predictions `open`; write `coverage_levels` from the finalizer's proposal (PM may override); `decided_at`; outbox `coverage.state_changed` (adapter creates channel + posts report) |
 | 7 | `decision_pending` | `watch` | `decide:watch` | PM | as above | same as 6, monitoring cadence = watch |
 | 8 | `decision_pending` | `rejected` | `decide:reject` | PM | as above | answer gate; branch retained, **not** merged; predictions of that run marked `superseded` (never scored — they were never adopted); no channel |
@@ -1025,6 +1030,11 @@ CLAIM_SQL = text("""
         WHERE s.status = 'queued'
           AND s.available_at <= now()
           AND r.status = 'running'
+          AND (s.depends_on_seq IS NULL OR EXISTS (
+                SELECT 1 FROM run_stages d
+                WHERE d.run_id = s.run_id
+                  AND d.seq = s.depends_on_seq
+                  AND d.status IN ('succeeded', 'skipped')))
           AND (:substrates IS NULL OR s.substrate = ANY(:substrates))
           AND (:houses IS NULL OR s.house = ANY(:houses))
         ORDER BY r.priority DESC, r.created_at, s.seq
@@ -1046,6 +1056,13 @@ CLAIM_SQL = text("""
 
 - `FOR UPDATE OF s SKIP LOCKED` — two runner workers never claim the same stage; a
   locked row is skipped rather than blocking (design/05 §1).
+- **Stage dependencies are enforced here, in the claim query itself** (the `EXISTS` on
+  `depends_on_seq`): a stage whose dependency has not reached `succeeded`/`skipped` is
+  simply invisible to workers. There is no separate orchestrator "release" step to race
+  with — a verifier stage cannot be claimed while the author stage is still running.
+  A `skipped` dependency satisfies its dependents; the orchestrator only marks a stage
+  `skipped` once its own dependency chain is settled, so a skip cannot open a claim
+  window ahead of an unfinished earlier stage.
 - Only stages of a run already in `running` are claimable: the orchestrator promotes
   `queued → running` (and acquires the coverage lock) *before* stages become visible to
   the runner. That keeps per-ticker serialization in one place.
@@ -1171,7 +1188,11 @@ touch **no** external service.
   silently allowing `watch → decision_pending`).
 - Guards: `exit` from `active` with an open position raises unless `force=True`;
   `force=True` without a note raises; `set_lead` to a `meta` or non-`assignable` house
-  raises; `set_lead` during `initiating`/`decision_pending` raises.
+  raises; `set_lead` during `initiating`/`decision_pending` raises; `withdraw` without a
+  note raises.
+- `initiation_cancelled` from `decision_pending` returns the "cancel open gate, release
+  lock, retain branch" side effects; the coverage is then retryable via `retry_initiation`
+  (row 5) — the cancel-at-gate path can never strand a ticker.
 - `promote` returns the "spawn `deep_review`" side effect; `decide:reject` returns the
   "supersede predictions, do not merge branch" side effect.
 - Run SM: `running → queued` allowed with `attempts < max_attempts`; forbidden after
@@ -1219,6 +1240,10 @@ URL from settings; skipped if unset). These cover everything SQLite cannot prove
 - **Queue exclusivity**: N threads/connections call `claim_stage` concurrently on M
   queued stages → each stage is claimed exactly once, no worker blocks (SKIP LOCKED),
   no duplicate `RETURNING` row.
+- **Dependency gating**: with stage 1 `running` and stage 2 `queued` (`depends_on_seq=1`),
+  `claim_stage` returns nothing; the moment stage 1 is `succeeded` (or `skipped`),
+  stage 2 is claimable. Two parallel stages both depending on seq 1 are both claimable
+  after it.
 - **Lease/reaper**: a claimed stage whose `lease_expires_at` passes is requeued by
   `reap_expired`, its open attempt closed `kill_reason='lease_expired'`, and
   `attempts` incremented; after `max_attempts` it is `failed` and the run fails.
@@ -1326,3 +1351,23 @@ factories. **No fake in this repo ever opens a socket.**
    concurrently with a heavy run on the same ticker. If a future monitor wants to write
    `events/` notes into the dossier, it must become a `mutates_dossier` run type and take
    the lock.
+
+---
+
+## 12. Cross-spec amendments to this schema (fold in at BUILD)
+
+Later specs amend this baseline. **None of this spec has been built yet, so the builder
+folds these in directly** (they are listed authoritatively here; the motivating spec owns
+the semantics):
+
+| Amendment | Source |
+|---|---|
+| `StageRole` gains `PM_QUERY = "pm_query"` (needs `doctrine/roles/pm_query.md`, PM-approved) | SPEC-CORE §3.2/§10 |
+| `runs`: partial unique index `uq_runs_trigger_ref ON (coverage_id, type, trigger_ref) WHERE trigger_ref IS NOT NULL` | SPEC-CORE §4 |
+| `corrections` gains `idempotency_key String(64) UNIQUE = sha256(stage_id \| target \| was \| now)` | SPEC-INITIATION §6 |
+| `predictions` gains `direction String(8)` (`up\|down\|flat`) and `pinned_price Price`, both code-written at registration | SPEC-TRACKREC §2.2 |
+| `events` gains `pm_rating SmallInteger \| None`, `pm_rated_at`, `pm_rated_by` | SPEC-TRACKREC §8 |
+| New table `house_metric_snapshots (house, as_of, scope, metrics JSONB)`, unique `(house, as_of, scope)` | SPEC-TRACKREC §3 |
+| New tables `mm_channels`, `mm_posts` (core-owned; adapter reaches them only via the API) | SPEC-ADAPTER §3.2 |
+| `outbox_events` is consumed **through the core API** (`POST /outbox/claim\|{id}/ack\|{id}/nack`), not by the adapter touching Postgres — §4.22's "the adapter consumes with SKIP LOCKED" claim happens inside core | SPEC-ADAPTER §5.1 |
+| `tripwires.yaml` gains optional per-tripwire `keywords: [...]` (dossier contract, not a DB column) | SPEC-MONITORING §4.2 amending SPEC-INITIATION §3.3 |

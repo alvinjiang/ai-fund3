@@ -150,8 +150,9 @@ Per stage:
 1. First stage of a run: `git worktree add --no-checkout <run_dir> -b run/<run_id> <base>`
    where `<base>` = the coverage's current `main` commit (recorded as
    `runs.dossier_commit_before`).
-2. `git sparse-checkout set --cone dossiers/<slug>` → only this ticker's directory
-   materializes. Cross-ticker leakage into a sandbox is thereby impossible.
+2. `git sparse-checkout set --cone <slug>` → only this ticker's directory materializes
+   (the dossier repo's root contains one directory per ticker — there is no `dossiers/`
+   prefix *inside* that repo). Cross-ticker leakage into a sandbox is thereby impossible.
 3. The **sandbox is bind-mounted at the ticker directory**, not at the repo root, and it
    is a plain directory with **no `.git`**. The agent edits files; it cannot rewrite
    history, cannot see other tickers, cannot push.
@@ -470,6 +471,14 @@ alerts on drift (SPEC-CORE §4).
 - Structured output: the response is parsed into the same `stage_result` schema and put
   through the same gates (the applicable subset). A schema failure retries once with the
   parse error named, then fails the stage.
+- **The api substrate cannot satisfy roles that must write the workspace.** Where a role's
+  artifact contract requires files (e.g. an `event_analysis` author's `events/` note or
+  dossier edits), an api-substrate stage is **triage-only**: it may conclude
+  `nothing_material` (the runner materializes the digest-grade note from the structured
+  result — code writes the file, the model supplies content, same pattern as the
+  `predictions.yaml` mirror). Any other conclusion causes the orchestrator to re-plan the
+  stage on the harness substrate rather than accept an artifact the loop cannot produce
+  (SPEC-MONITORING §8).
 
 ---
 

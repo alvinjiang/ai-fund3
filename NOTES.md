@@ -1,5 +1,43 @@
 # NOTES
 
+## 2026-07-17 — Spec review pass (Fable): cross-spec consistency fixes
+
+Full review of all 8 `specs/SPEC-*.md` against `design/` and the authoring checklist,
+by the model tier that wrote the design docs. **Verdict: the specs are strong and are
+kept — no rewrite.** Four real cross-spec defects and several small gaps were corrected
+in place (no code exists yet, so all fixes are spec edits, no migrations):
+
+1. **Queue dependency hole** (SPEC-DOMAIN §6.3 + SPEC-CORE §3.3): the `SKIP LOCKED`
+   claim SQL never checked `depends_on_seq`, so a verifier stage was claimable while the
+   author stage was still running; SPEC-CORE's "release ready stages" step named no
+   mechanism. Fixed by adding the dependency `EXISTS` predicate to the claim query itself
+   (supports the future `parallel_verify` case; `skipped` satisfies dependents) and
+   rewording SPEC-CORE — readiness is enforced in one place, with an integration test.
+2. **`decision_pending` dead-end** (SPEC-DOMAIN §5 vs SPEC-INITIATION §7): cancelling an
+   initiation at the PM gate had no legal coverage transition — the gate would be
+   cancelled and the ticker stuck (`decide` requires an open gate). Added
+   `decision_pending → failed` (`initiation_cancelled`) plus a PM `withdraw` edge
+   (`proposed|failed → rejected`) so no state can strand.
+3. **api-substrate `event_analysis` contradiction** (SPEC-CORE §3.2 / SPEC-MONITORING §8
+   vs SPEC-RUNNER §8): the api loop has no workspace writes, but the role's gates require
+   an `events/` note + dossier edits. Resolved as **triage-only**: an api attempt may
+   conclude `nothing_material` (runner materializes the note from the structured result);
+   anything material re-plans the stage on harness. Tests added.
+4. **`queries/` curation flow impossible as written** (SPEC-INITIATION §3.4 said the
+   read-only, already-finished `pm_query` run writes the file; SPEC-ADAPTER called
+   `POST /queries/{id}/keep`, which SPEC-CORE never defined). Now: core writes it as a
+   code-formatted **system commit** under the coverage lock; route added to SPEC-CORE
+   §5.1 + CLI.
+
+Smaller fixes: sparse-checkout cone path (`<slug>`, not `dossiers/<slug>` — the dossier
+repo root has no prefix); direction-aware `entry_point` scoring (breakout entries above
+the pinned price used the wrong comparison); dropped dead schema (`disagreements.pm_rating`
+— v1 rates events only; unused `GateKind.REVIEW_ESCALATION`); CLI parity gaps closed
+(`fund re-propose`, `fund dossier show`, `fund run artifacts`, `fund query keep`); and a
+new **SPEC-DOMAIN §12 amendments registry** consolidating every later spec's schema
+amendment so the phase-1.3 builder doesn't have to scan five specs (per the "fold in if
+not yet built" rule below).
+
 ## 2026-07-12 — v3 repo bootstrapped (transfer from v2)
 
 Created `ai-fund3` as a fresh repo (PM-confirmed fresh-repo decision, closing the open

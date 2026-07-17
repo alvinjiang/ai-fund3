@@ -84,7 +84,8 @@ the last scan and write a `prediction_hits` row (unique per `(prediction_id, hit
 | `target_price`, `direction=up` | `adj_close >= adj_target` |
 | `target_price`, `direction=down` | `adj_close <= adj_target` |
 | `target_price`, `direction=flat` | no hits considered (scored at horizon on error only) |
-| `entry_point` | `adj_low <= adj_entry` (an entry is reached intraday if the day's low touches it; if the provider gives no low, `adj_close <= adj_entry`) |
+| `entry_point`, `direction=down` (the usual pullback entry) | `adj_low <= adj_entry` (an entry is reached intraday if the day's low touches it; if the provider gives no low, `adj_close <= adj_entry`) |
+| `entry_point`, `direction=up` (a breakout entry above the pinned price) | `adj_high >= adj_entry` (no high data → `adj_close >= adj_entry`) — the `direction` column (§2.2) already records which side the entry sits on |
 | `scenario` | no per-day hits; scored as a group at horizon (§2.4) |
 | `stance` | no per-day hits; scored at horizon on realized total return |
 | `event_forecast` | not price-resolvable → **PM resolves** (`fund predictions resolve <id> hit\|miss --notes`), else `expired` at horizon |
@@ -97,7 +98,7 @@ prints once and falls back still counts as a hit — the fund could have sold th
 | Kind | `status` | `realized_price` | `error_pct` |
 |---|---|---|---|
 | `target_price` | `hit` if ≥1 hit row, else `miss` | best directional hit (max close for `up`, min for `down`), else close at horizon | signed `(realized − target)/target` (realized = close at horizon, **always**, so error is comparable across hits and misses) |
-| `entry_point` | `hit` if the entry was reachable in-window, else `miss` | best (lowest) low, else close at horizon | as above |
+| `entry_point` | `hit` if the entry was reachable in-window, else `miss` | best low for `down` (best high for `up`), else close at horizon | as above |
 | `scenario` (group) | the scenario nearest the realized close → `hit`; siblings → `miss` | close at horizon | per-row |
 | `stance` | `hit` if realized total return clears the band for that stance (`fund.yaml scoring.stance_bands`: e.g. buy ≥ +5%, hold within ±10%, sell ≤ −5%), else `miss` | close at horizon | realized total return |
 

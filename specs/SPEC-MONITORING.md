@@ -343,7 +343,14 @@ auto `deep_review` (SPEC-TRACKREC owns that one).
 
 **Stage 1 must**: assess the event against the thesis; update the dossier **or explicitly
 declare `nothing_material`**; adjust predictions if warranted (superseding, never
-editing); write `events/YYYYMMDD-<slug>.md` with workings and a PM-facing note. Its
+editing); write `events/YYYYMMDD-<slug>.md` with workings and a PM-facing note.
+
+**The api variant is triage, not analysis** (it has no workspace and cannot write the
+dossier — SPEC-RUNNER §8): an api-substrate stage 1 may conclude only `nothing_material`,
+in which case the **runner** materializes the `events/` note from the structured result
+and the run succeeds cheaply. If the api attempt concludes anything material — a dossier
+change, a prediction adjustment, a stance move — the orchestrator **re-plans the stage on
+harness** (the api spend was the triage cost; correctness is never traded for it). Its
 `task.md` carries the triggering event verbatim (the tripwire text, the article title +
 URL + source tier, or the PM's question) — the agent sees *what fired*, not a summary of
 it. Predictions are registered from **this** stage (the lead owns the thesis; there is no
@@ -449,6 +456,11 @@ socket block — **no news provider, market-data service, or model is reachable*
   prominently.
 - `nothing_material` from the author → run succeeds, dossier unchanged, no dossier-contract
   failure, and the event is marked handled.
+- **Triage fail-over**: an api-substrate author (info severity, `allow_api_for_info: true`)
+  returning `nothing_material` → the runner materializes the `events/` note and the run
+  succeeds with no harness launch; the same stage returning a prediction change → the stage
+  is re-planned on harness (assert a new harness attempt exists and the api result was not
+  accepted as final).
 - A monitor tick runs while an `initiation` holds the coverage lock (assert it is not
   blocked); a spawned `event_analysis` on that ticker stays `queued` until the lock frees.
 

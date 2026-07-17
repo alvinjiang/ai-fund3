@@ -271,7 +271,7 @@ create_run(type, *, coverage_id=None, trigger, trigger_ref=None, params={},
 |---|---|---|---|
 | `initiation` | 1 author · 2..(1+N) verifier ×`verify_count` · [data_checker] · last finalizer | lead; verifiers = rotating contributors; finalizer = lead | harness |
 | `deep_review` | 1 author(update) · 2 verifier | lead; verifier = next contributor in rotation | harness |
-| `event_analysis` | 1 analyst(author role, event scope) [· 2 cross_check appended dynamically, §3.4] | lead; cross-check = a contributor | harness (api if severity=`info` and config allows) |
+| `event_analysis` | 1 analyst(author role, event scope) [· 2 cross_check appended dynamically, §3.4] | lead; cross-check = a contributor | harness (api if severity=`info` and config allows — **triage-only**: an api attempt that concludes anything but `nothing_material` is re-planned on harness, SPEC-MONITORING §8) |
 | `monitor_tick` | 1 monitor | `fund.yaml monitor.house`, **light** model | api |
 | `pm_query` | 1 pm_query | lead house, **light** model | api |
 | `lead_review` | one `lead_review` stage **per contributor** (ballots), evaluated in parallel | all enabled assignable contributors | api (harness if configured) |
@@ -301,10 +301,11 @@ Each tick, in one short transaction per item (never one giant transaction):
    coverage (`proposed → initiating` for initiations). If the lock is held, the run stays
    `queued` — this is **not** an error and is not retried with backoff; it is re-tried
    next tick.
-2. **Release ready stages**: a stage becomes claimable when its `depends_on_seq` stage is
-   `succeeded`/`skipped` and its run is `running` (the claim SQL in SPEC-DOMAIN §6.3
-   already filters on `runs.status='running'`, so "release" = the dependency check plus
-   `available_at`).
+2. **Stage readiness needs no orchestrator step**: claimability is enforced entirely
+   inside the claim SQL (SPEC-DOMAIN §6.3) — run `running`, `available_at` reached, and
+   the `depends_on_seq` dependency `succeeded`/`skipped` (an `EXISTS` in the query). The
+   orchestrator neither "releases" stages nor can it race the runner over readiness; its
+   only stage-visibility lever is promoting the run to `running`.
 3. **Collect finished stages**: for each stage that reached a terminal status since the
    last tick, run `on_stage_finished()` (§3.4).
 4. **Reap**: `queue.reap_expired(now)` — expired leases → requeue with backoff or fail.
@@ -450,6 +451,9 @@ POST   /gates/{id}/answer             {answer, notes?}
 **Research and read models**
 ```
 POST   /queries                       {coverage, question}            → pm_query run (light)
+POST   /queries/{run_id}/keep         → curate this pm_query Q&A into dossiers/<slug>/queries/
+                                        (system-generated commit; see SPEC-INITIATION §3.4 —
+                                        the adapter maps the PM's keep-reaction to this route)
 GET    /predictions                   ?coverage=&house=&status=
 GET    /track-record                  ?house=&coverage=&since=        (SPEC-TRACKREC computes)
 GET    /events                        ?coverage=&since=&severity=
@@ -493,6 +497,10 @@ fund runs list [--status running]        fund run show <id>
 fund run cancel <id> --reason "..."      fund run retry <id>
 fund gates list                          fund gates answer <id> active --notes "..."
 fund query tse_2267 "how does the China JV affect the thesis?"
+fund query keep <run_id>                 # curate that Q&A into the dossier (POST /queries/{run_id}/keep)
+fund re-propose tse_2267                 # POST /coverage/{slug}/re-propose
+fund dossier show tse_2267               # GET /coverage/{slug}/dossier
+fund run artifacts <id> <kind> [-o FILE] # GET /runs/{id}/artifacts/{kind}
 fund track-record [--house gpt] [--coverage tse_2267]
 fund predictions list [--status open]
 fund events list [--coverage tse_2267]   fund events rate <id> up|down

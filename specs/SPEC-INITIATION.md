@@ -223,7 +223,15 @@ Validators:
   `report-content.md`, `<NAME>.xlsx`, `build_workbook.py`, `references.md`,
   `corrections.md`, `reconciliation.yaml`, `pm-summary.md`, `<NAME>.html`, `<NAME>.pdf`.
 - **`events/`** — `YYYYMMDD-<slug>.md`, written by `event_analysis` / `deep_review`.
-- **`queries/`** — curated PM Q&A, written by `pm_query` runs only when the PM says keep.
+- **`queries/`** — curated PM Q&A. A `pm_query` run is read-only and finished by the time
+  the PM decides an exchange is worth keeping, so the file is written by **core, as a
+  system commit** (like the `predictions.yaml` mirror): `POST /queries/{run_id}/keep`
+  (SPEC-CORE §5.1; the adapter maps the PM's keep-reaction to it) formats the question,
+  answer, date, and run reference **in code** and commits
+  `queries/YYYYMMDD-<slug>.md` to dossier `main` (`query:<run_id> keep` message).
+  The commit takes the coverage run lock; if a mutating run holds it, the keep is queued
+  and applied when free (bookkeeping, not time-critical). No model ever writes this
+  directory.
 
 ### 3.5 New-ticker scaffolding and re-initiation
 
