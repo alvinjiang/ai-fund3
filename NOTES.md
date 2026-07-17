@@ -38,6 +38,27 @@ new **SPEC-DOMAIN §12 amendments registry** consolidating every later spec's sc
 amendment so the phase-1.3 builder doesn't have to scan five specs (per the "fold in if
 not yet built" rule below).
 
+**Role-prompt ↔ spec-contract audit** (follow-up, same session): all 8
+`doctrine/roles/*.md` checked against the machine contracts the specs later defined
+(SPEC-RUNNER §6.1 `stage_result` schema + artifact gates, SPEC-INITIATION §3–4 dossier
+validators, SPEC-TRACKREC §6.3 ballots, SPEC-DISTILLATION §5.1). Result: **compatible —
+no gate-contradicting instruction found** (author/verifier/finalizer/cross_check/
+lead_review/data_checker/monitor all match their gates' field vocabulary). SPEC-RUNNER
+§4.2 amended: `task.md` must spell out the config-derived validator numbers
+(min_tripwires, tolerances, min_references, max_price_age_days) since role prompts
+deliberately omit them. Two **proposed doctrine edits reported, not applied**
+(doctrine is PM-owned; 0.3 rule):
+1. `distiller.md` — says the window is "since the last distillation"; SPEC-DISTILLATION
+   §2 defines it as *since the current doctrine version's `approved_at`* (a rejected
+   amendment must not shrink the evidence window). One-line wording fix.
+2. `distiller.md` — asks for "a one-paragraph summary" in `stage_result.yaml` but does
+   not mention the structured `amendments[].cites` list of **resolvable ids**
+   (`correction:<id>`, `run:<id>`) the §6.3 citation gate enforces; prose-cited incidents
+   would fail the gate. Suggest naming the citation form in the role prompt (task.md
+   carries the schema either way, so this is retry-avoidance, not correctness).
+Also pending PM: `doctrine/roles/pm_query.md` (text proposed in SPEC-CORE §10) must be
+approved before any `pm_query` run can execute.
+
 ## 2026-07-12 — v3 repo bootstrapped (transfer from v2)
 
 Created `ai-fund3` as a fresh repo (PM-confirmed fresh-repo decision, closing the open

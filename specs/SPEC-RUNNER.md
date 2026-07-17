@@ -187,7 +187,11 @@ Assembled by `runner/task.py` in this order (design/04 §5 — personas removed)
 5. **Stock-specific lessons** — `dossiers/<slug>/lessons.md`.
 6. **Task** — trigger context (the tripwire that fired, the PM's question, the event), the
    required outputs for this role, the `stage_result.yaml` schema, and the hard deadline
-   and budget.
+   and budget. **Config-derived validator numbers are spelled out here**, because a model
+   cannot guess them and a missed one burns a $10+ retry: `dossier.min_tripwires` (and the
+   ≥1 thesis-severity rule), the scenario/method-weight sum tolerance, `reconcile.tolerance_pct`,
+   `reconcile.min_references`, and `max_price_age_days` (SPEC-INITIATION §3 validators).
+   The role prompts carry judgment; `task.md` carries the exact machine contract.
 7. **On a retry only** — the *named omissions* block (§6.4).
 
 `task.md` is written into the workspace and **stored as an artifact** (`kind='task'`), so
