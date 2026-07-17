@@ -1,5 +1,34 @@
 # NOTES
 
+## 2026-07-18 — Fable derisking session: SPEC-MARKETDATA, doctrine diffs staged, review checklists
+
+Front-loaded the remaining strong-model work before BUILD begins (PM: "derisk or decide
+in advance — I may not be able to call on you after implementation is done"). Three
+deliverables:
+
+1. **`specs/SPEC-MARKETDATA.md` (new)** — Phase 2.3 reclassified from CHORE to
+   SPEC+CHORE (PROMPTS.md updated). Reading v2 `data_sources/` confirmed the port alone
+   would not meet what later specs assume: v2 serves a *live* last price (no
+   per-trading-date pinned close), FX with **no date parameter**, **unadjusted** history
+   with no adjustment factors or dividends, no halt/delisting signal, and no earnings
+   calendar outside J-Quants. The spec defines the endpoint contract (pinned close vs
+   display-only quote as separate endpoints; **persisted `price_pins`** so provider
+   revisions can't rewrite what a report reconciled against — added to SPEC-DOMAIN §12
+   registry; dated FX; `adj_factor_cum` + dividends with confidence labels;
+   `/status` halt inference; tiered earnings calendars with the quarterly sweep as the
+   stated floor). ⚠️ **Operator decision before the 2.4 pilot** (spec §3.3): J-Quants
+   free plan delays data up to 12 weeks — every JP price-pin gate would fail (the pilot
+   ticker is likely JP). Choose paid-plan-primary or yfinance-primary for `tse`;
+   `checkconfig --strict` now specced to enforce the choice.
+2. **`docs/PROPOSED_DOCTRINE_EDITS.md` (new)** — the three PM-owned doctrine changes
+   staged as ready-to-apply diffs: distiller evidence-window wording (matches
+   SPEC-DISTILLATION §2), distiller citation-id form (avoids citation-gate retries),
+   and the new `doctrine/roles/pm_query.md` (blocking for pm_query runs).
+3. **`docs/BUILD_REVIEW_CHECKLISTS.md` (new)** — per-branch review criteria for every
+   BUILD PR (the failure modes a mid-tier builder introduces while tests still pass:
+   silent defaults, gate "repair", float creep, borrowed keys, import-time clients),
+   plus the 2.4/3.3 gate-failure triage order. AGENTS.md now points PR review at it.
+
 ## 2026-07-17 — Spec review pass (Fable): cross-spec consistency fixes
 
 Full review of all 8 `specs/SPEC-*.md` against `design/` and the authoring checklist,

@@ -170,13 +170,17 @@ design adjusts here cheaply. **Do not reorder.**
 > Implement `specs/SPEC-RUNNER.md` (branch `spec-runner`), TDD with a fake harness.
 > Real-harness integration test behind a manual flag.
 
-### 2.3 CHORE — Market-data service (minimal)
+### 2.3 SPEC done → CHORE — Market-data service  [spec: `specs/SPEC-MARKETDATA.md`]
 
-> Port v2 `/home/alvin/aicode/ai-fund/data_sources/` (router, fx, freshness,
-> exchange_registry; jquants + sec_edgar as-is) and expose GET endpoints (pinned price
-> with source+timestamp, history, FX) as a localhost service reachable from sandboxes.
-> Full monitor integration comes in Phase 4; this step only serves the pipeline's price
-> needs.
+> **Interface already specified** (2026-07-18 Fable session — the v2 port alone would
+> not have met what later specs assume: pinned close per trading date, dated FX,
+> adjustment factors + dividends, halt signal, earnings-calendar tiers). Implement
+> `specs/SPEC-MARKETDATA.md`: port v2 `/home/alvin/aicode/ai-fund/data_sources/`
+> (router, fx, freshness, exchange_registry; jquants + sec_edgar) behind the specced
+> endpoints as a localhost service reachable from sandboxes. ⚠️ Operator decision
+> before the 2.4 pilot: J-Quants paid plan vs `yfinance`-primary for JP (spec §3.3 —
+> the free plan's 12-week delay fails every JP price-pin gate). Full monitor
+> integration comes in Phase 4; this step serves the pipeline's price needs.
 
 ### 2.4 ⛔ PM GATE — Pilot initiation
 

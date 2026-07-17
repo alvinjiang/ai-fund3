@@ -36,7 +36,9 @@
 **Workflow (carry over from v2 — they worked):**
 - Spec → implement. Each feature gets a self-contained `specs/SPEC-*.md` first
   (strongest reasoning model tier), then a BUILD branch implements it. One branch per
-  spec; PR review before merge.
+  spec; PR review before merge — **review against
+  `docs/BUILD_REVIEW_CHECKLISTS.md`** (per-spec criteria written in advance by the
+  spec-review tier; use its section for the branch as the review's focus areas).
 - Every change gets a dated `NOTES.md` entry (date, reason, affected files). `README.md`
   is updated on every feature branch.
 - TDD. Run `pytest tests/` after each meaningful change.

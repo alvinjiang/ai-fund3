@@ -1371,3 +1371,4 @@ the semantics):
 | New tables `mm_channels`, `mm_posts` (core-owned; adapter reaches them only via the API) | SPEC-ADAPTER §3.2 |
 | `outbox_events` is consumed **through the core API** (`POST /outbox/claim\|{id}/ack\|{id}/nack`), not by the adapter touching Postgres — §4.22's "the adapter consumes with SKIP LOCKED" claim happens inside core | SPEC-ADAPTER §5.1 |
 | `tripwires.yaml` gains optional per-tripwire `keywords: [...]` (dossier contract, not a DB column) | SPEC-MONITORING §4.2 amending SPEC-INITIATION §3.3 |
+| New table `price_pins (exchange, ticker, trading_date, value, currency, source, pinned_at)`, unique on the first three — the persisted "one price truth"; owned and written only by the market-data service | SPEC-MARKETDATA §2.1 |
