@@ -147,26 +147,14 @@ def test_decide_active_merges_branch_and_opens_predictions():
     assert "predictions_open" in t.side_effects
 
 
-def test_initiation_cancelled_releases_lock_and_retains_branch():
+def test_initiation_cancelled_cancels_gate_and_retains_branch():
+    # Lock release is a run-lifecycle concern (runs_repo.finish_run), not a coverage-SM
+    # side effect, so it is intentionally not asserted here.
     t = transition(CoverageState.DECISION_PENDING, Action.INITIATION_CANCELLED, HAPPY)
     assert "cancel_open_gate" in t.side_effects
-    assert "release_lock" in t.side_effects
     assert "retain_branch" in t.side_effects
 
 
-def test_start_initiation_acquires_lock():
+def test_start_initiation_sets_lead():
     t = transition(CoverageState.PROPOSED, Action.START_INITIATION, HAPPY)
-    assert "acquire_lock" in t.side_effects
-
-
-def test_failed_terminal_releases_lock():
-    assert (
-        "release_lock"
-        in transition(CoverageState.INITIATING, Action.INITIATION_FAILED, HAPPY).side_effects
-    )
-    assert (
-        "release_lock"
-        in transition(
-            CoverageState.DECISION_PENDING, Action.INITIATION_CANCELLED, HAPPY
-        ).side_effects
-    )
+    assert "set_lead_house" in t.side_effects

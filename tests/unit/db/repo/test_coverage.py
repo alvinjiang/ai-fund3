@@ -70,8 +70,8 @@ def test_full_lifecycle_propose_to_active(session):
     )
     assert c.state == CoverageState.INITIATING.value
     assert c.lead_house == "gpt"
-    # lock acquired
-    assert session.query(models.CoverageRunLock).filter_by(coverage_id=c.id).one().run_id == r.id
+    # lock acquisition is a run-lifecycle concern (runs_repo.start_run), not the
+    # coverage transition's; verified in tests/unit/db/repo/test_runs.py.
 
     cov_repo.transition(
         session,

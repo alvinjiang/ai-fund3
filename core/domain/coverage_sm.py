@@ -83,7 +83,7 @@ _ENTRIES: dict[tuple[Any, Action], tuple[CoverageState, str, list[str]]] = {
     (CoverageState.PROPOSED, Action.START_INITIATION): (
         CoverageState.INITIATING,
         "start_initiation",
-        ["set_lead_house", "acquire_lock"],
+        ["set_lead_house"],
     ),
     (CoverageState.INITIATING, Action.INITIATION_DELIVERED): (
         CoverageState.DECISION_PENDING,
@@ -93,12 +93,12 @@ _ENTRIES: dict[tuple[Any, Action], tuple[CoverageState, str, list[str]]] = {
     (CoverageState.INITIATING, Action.INITIATION_FAILED): (
         CoverageState.FAILED,
         "initiation_failed",
-        ["release_lock", "outbox:run.finished"],
+        ["outbox:run.finished"],
     ),
     (CoverageState.DECISION_PENDING, Action.INITIATION_CANCELLED): (
         CoverageState.FAILED,
         "initiation_cancelled",
-        ["cancel_open_gate", "release_lock", "retain_branch", "outbox:run.finished"],
+        ["cancel_open_gate", "retain_branch", "outbox:run.finished"],
     ),
     (CoverageState.FAILED, Action.RETRY_INITIATION): (
         CoverageState.INITIATING,

@@ -1,6 +1,31 @@
 import socket
 
 import pytest
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session
+
+import core.db.models  # noqa: F401  (register tables on Base.metadata before create_all)
+from core.db.base import Base
+
+
+@pytest.fixture()
+def engine():
+    eng = create_engine("sqlite+pysqlite:///:memory:", future=True)
+
+    @event.listens_for(eng, "connect")
+    def _fk_on(dbapi_conn, _):
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
+    Base.metadata.create_all(eng)
+    return eng
+
+
+@pytest.fixture()
+def session(engine):
+    with Session(engine) as s:
+        yield s
 
 
 @pytest.fixture(autouse=True)
