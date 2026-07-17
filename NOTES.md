@@ -367,3 +367,56 @@ testcontainers) green; ruff clean.
   counter (v2 cost-drift lesson).
 
 Next: Phase 1.3 (spec-core) — orchestrator + config + core API + CLI (`SPEC-CORE.md`).
+
+## 2026-07-18 — Phase 1.3 (spec-core) BUILD complete — SPEC-CORE implemented
+
+Implemented `specs/SPEC-CORE.md` on branch `spec-core`, TDD from the spec's §9 plan. 335
+unit + 9 integration tests green; ruff clean.
+
+- **Config (§2):** `settings` (pydantic-settings, required `core_api_token`, frozen,
+  `_env_file=None` test override), `houses` (assignable/meta exclusivity, ≥1 assignable,
+  provider-key resolver that names missing vars not values), `fund` (run policies +
+  auto-cross-check thresholds), `pricing` (single price resolver; unpriced = hard error),
+  `store` (atomic-snapshot rebind), `checkconfig` (assignable/priced/keys/pm checks).
+- **Orchestrator (§3):** pure `planner` (every run-type stage graph + dependency chain +
+  meta firewall) and `rotation`; `engine` (create_run, promote_run with coverage
+  proposed→initiating, advance_run draining via a runner, register predictions, append
+  cross_check on a material ΔTP, per-run budget cap → `budget_cap` gate, finalize at the
+  initiation gate / succeed, fail on terminal stage failure), `tick`; pure cross-check
+  rule (reads registered predictions, not prose).
+- **FakeRunner (§9.1):** claims via the real `queue.claim_stage`, canned per-role results,
+  configurable fail/hang — the whole flow proven with zero LLM.
+- **API (§5):** FastAPI app + `require_pm` (bearer + allowlist) + `Idempotency`
+  (body_hash replay / 409) + structured error envelope; coverage/runs/gates/health routes.
+- **CLI (§6):** `fund` httpx client; `ROUTE_COMMAND_MAP` parity asserted total vs the
+  router (an added route without a command fails CI).
+- **Scheduler (§4):** `session_tick`/`watch_tick` (deterministic `trigger_ref`, idempotent
+  double-fire), `schedule_watchdog` (stale-job detection), leader advisory-lock helper.
+
+**Fixes worth flagging:**
+- Coverage lock is a **run-lifecycle** concern (acquire in `runs_repo.start_run`, release
+  in `finish_run`); removed `acquire_lock`/`release_lock` from the coverage SM side effects
+  (SPEC-DOMAIN §5 vs SPEC-CORE §3.3 were redundant) — a genuine cross-spec reconciliation.
+- API tests use `StaticPool` so the SQLite `:memory:` DB is shared across TestClient's
+  portal thread, and are marked `allow_network` (TestClient's anyio bridge uses a
+  socketpair — not an outbound connection).
+- The required `core_api_token` meant alembic's `env.py` (which reads `get_settings()`)
+  needs `CORE_API_TOKEN` in the integration env — set in the integration conftest.
+- B008 ignored for `core/api/**` (FastAPI's `Depends()` in defaults idiom).
+
+**Deferred (tracked, do not block the merge):**
+- §9.2 transient `running→queued` re-entry test: a retryable stage failure is currently
+  absorbed within `FakeRunner.drain` (the stage requeues with `available_at=now` and
+  re-succeeds in the same drain). True run-level pause/resume on a retryable failure (with
+  config-driven backoff) is the phase-2 runner's natural home; revisit with SPEC-RUNNER.
+- §3.5 per-house **daily** budgets (`house_budget_days` reserve/settle): only the per-run
+  cap is enforced; the per-house daily cap + desk notice is deferred to the runner/cost
+  port (phase 2/7.2).
+- Research read-model API routes (queries/predictions/track-record/events/costs): the
+  lifecycle routes (coverage/runs/gates/health) are implemented; the read models are
+  stubbed and land with their owning specs (SPEC-MONITORING/TRACKREC/ADAPTER).
+- Leader advisory lock: `pg_try_advisory_lock` is wired; the two-core-processes
+  exclusivity is an integration test that needs a second process (deferred).
+
+Phase 1.3 BUILD (spec-domain + spec-core) is complete. Next per PROMPTS: Phase 1.4 CHORE
+(port v2 infra: retry_policy, rate_budget, logging/redaction, shutdown, async_utils).

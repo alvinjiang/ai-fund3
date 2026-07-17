@@ -45,6 +45,10 @@ def pg_url():
     pc.start()
     url = pc.get_connection_url()
     os.environ["DATABASE_URL"] = url
+    os.environ["CORE_API_TOKEN"] = (
+        "integration-tok"  # required by Settings; alembic env.py reads it
+    )
+    os.environ["ARTIFACTS_DIR"] = "/tmp/ai-fund-artifacts"
     reset_settings()
     yield url
     pc.stop()

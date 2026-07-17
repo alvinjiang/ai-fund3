@@ -44,6 +44,7 @@ def create_run(
     budget_cap_usd: Any,
     doctrine_version_id: UUID | None,
     requested_by: str | None = None,
+    trigger_ref: str | None = None,
 ) -> models.Run:
     type_val = _val(type)
     r = models.Run(
@@ -51,6 +52,7 @@ def create_run(
         type=type_val,
         status=RunStatus.QUEUED.value,
         trigger=trigger,
+        trigger_ref=trigger_ref,
         priority=priority,
         mutates_dossier=type_val not in _NON_MUTATING,
         requested_by=requested_by,

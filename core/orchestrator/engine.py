@@ -51,6 +51,7 @@ def create_run(
     params: dict | None = None,
     requested_by: str | None = None,
     doctrine_version_id: UUID | None = None,
+    trigger_ref: str | None = None,
 ) -> models.Run:
     params = dict(params or {})
     meta_houses = set(meta_houses or set())
@@ -100,6 +101,7 @@ def create_run(
         budget_cap_usd=budget_cap,
         doctrine_version_id=doctrine_version_id,
         requested_by=requested_by,
+        trigger_ref=trigger_ref,
     )
     runs_repo.add_stages(session, run.id, stages)
     return run
@@ -280,10 +282,32 @@ def advance_run(session: Session, run_id: UUID, runner: Any, *, fund: FundConfig
         last_error = next((s.error for s in stages if s.error), "stage failed")
         fail_run(session, run_id, error=last_error, fund=fund)
         return
+    # Per-run budget cap: if spend has crossed the cap, pause at a budget_cap gate instead
+    # of continuing (design/05 §9: a run never silently degrades on cost). The PM raises
+    # the cap (audited into runs.params) or cancels.
+    if run.budget_cap_usd and run.cost_usd is not None and run.cost_usd > run.budget_cap_usd:
+        _pause_for_budget(session, run)
+        return
     if not all(s.status in _TERMINAL for s in stages):
         return  # more claimable work (e.g. an appended cross_check, or retries pending)
 
     finalize_run(session, run_id, fund=fund)
+
+
+def _pause_for_budget(session: Session, run: models.Run) -> None:
+    runs_repo.open_gate(
+        session,
+        run.id,
+        kind="budget_cap",
+        prompt=f"Run has spent {run.cost_usd} of cap {run.budget_cap_usd}; raise or cancel?",
+        payload={"cost_usd": str(run.cost_usd), "cap_usd": str(run.budget_cap_usd)},
+        allowed_answers=["raise_cap", "cancel"],
+    )
+    sm = run_transition(
+        RunStatus(run.status), RunAction.OPEN_GATE, RunTransitionContext(attempts=0, max_attempts=1)
+    )
+    run.status = sm.to_state.value
+    session.flush()
 
 
 def tick(session: Session, runner: Any, *, fund: FundConfig) -> None:

@@ -127,6 +127,29 @@ def test_event_analysis_appends_cross_check_on_material_tp_move(session):
     assert cross is not None, "a cross_check stage must be appended on a material TP move"
 
 
+def test_budget_cap_pauses_run_at_budget_gate(session):
+    _seed_houses(session)
+    cov = cov_repo.propose(session, "2267", "tse", "Yakult", "JPY", "pm1")
+    session.flush()
+    low = FundConfig(
+        runs={
+            "initiation": RunPolicy(verify_count=2, max_attempts=3, budget_cap_usd=Decimal("0.02"))
+        },
+        monitor=MonitorCfg(house="gpt"),
+        escalation=Escalation(auto_cross_check=AutoCrossCheck()),
+    )
+    run = engine.create_run(session, "initiation", cov.id, fund=low, params={"lead": "gpt"})
+    engine.promote_run(session, run.id, fund=low)
+    # 4 stages x FakeRunner's $0.01 = $0.04 > $0.02 cap -> pause at the budget gate
+    engine.advance_run(session, run.id, FakeRunner(), fund=low)
+    session.refresh(run)
+    assert run.status == "waiting_pm"
+    gate = (
+        session.query(models.PmGate).filter_by(run_id=run.id, kind="budget_cap", state="open").one()
+    )
+    assert gate.allowed_answers == ["raise_cap", "cancel"]
+
+
 def test_per_ticker_serialization_monitor_runs_while_initiation_waits(session):
     _seed_houses(session)
     cov = cov_repo.propose(session, "2267", "tse", "Yakult", "JPY", "pm1")
