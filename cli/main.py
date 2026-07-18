@@ -113,9 +113,19 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("house")
     sp.add_argument("--rationale")
 
+    sp = sub.add_parser("levels-set")
+    sp.add_argument("slug")
+    sp.add_argument("--entry", type=float)
+    sp.add_argument("--target", type=float)
+    sp.add_argument("--stop", type=float)
+    sp.add_argument("--currency", default="JPY")
+
     sp = sub.add_parser("run-new")
     sp.add_argument("type")
     sp.add_argument("--coverage")
+
+    sp = sub.add_parser("runs-list")
+    sp.add_argument("--status")
 
     sp = sub.add_parser("run-cancel")
     sp.add_argument("run_id")
@@ -147,6 +157,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("question")
     sub.add_parser("config-check")
 
+    # standalone (not via API — runs locally for ExecStartPre / operator preflight)
+    sp = sub.add_parser("checkconfig")
+    sp.add_argument("--strict", action="store_true")
+
     return p
 
 
@@ -177,6 +191,25 @@ def run(args: argparse.Namespace) -> int:
                 return _emit(c.re_propose(args.slug), args.json_out)
             if args.cmd == "lead-set":
                 return _emit(c.set_lead(args.slug, args.house, args.rationale), args.json_out)
+            if args.cmd == "levels-set":
+                levels = []
+                for kind, val in [
+                    ("entry", args.entry),
+                    ("target", args.target),
+                    ("stop", args.stop),
+                ]:
+                    if val is not None:
+                        levels.append(
+                            {
+                                "kind": kind,
+                                "value": val,
+                                "currency": args.currency,
+                                "direction": "above",
+                            }
+                        )
+                return _emit(c.set_levels(args.slug, levels), args.json_out)
+            if args.cmd == "runs-list":
+                return _emit(c.runs_list(status=args.status), args.json_out)
             if args.cmd == "run-new":
                 return _emit(c.new_run(args.type, args.coverage), args.json_out)
             if args.cmd == "run-cancel":
@@ -214,6 +247,21 @@ def run(args: argparse.Namespace) -> int:
         except CoreError as exc:
             print(json.dumps(exc.body, default=str), file=sys.stderr)
             return 1
+    # standalone local commands (not via the API — run before/without the service)
+    if args.cmd == "checkconfig":
+        from core.config.checkconfig import any_fail, format_table, run_checks
+        from core.config.settings import get_settings
+
+        try:
+            from core.config.store import get_config
+
+            cfg = get_config()
+        except Exception as exc:
+            print(f"config not loaded: {exc}", file=sys.stderr)
+            return 1
+        results = run_checks(cfg, get_settings())
+        print(format_table(results))
+        return 1 if args.strict and any_fail(results) else 0
     return 2
 
 

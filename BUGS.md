@@ -35,11 +35,16 @@ Created with fires-tests:
 `house_budget_days` table exists; reserve/settle logic does not. Needs the runner
 (phase 2) to check/reserve against the table before launching stage attempts.
 
-## 5. Route/CLI parity test bidirectionality — LARGELY ADDRESSED
+## 5. ~~Route/CLI parity test bidirectionality~~ — DONE
 
-The parity test (test_every_api_route_maps_to_a_distinct_cli_command) is already
-bidirectional for existing routes (routes == ROUTE_COMMAND_MAP.keys()). The remaining
-gap: spec-named routes not yet implemented (track-record, queries/keep, artifacts) —
-these depend on unbuilt specs and are listed in item 1's deferral. A full spec-coverage
-assertion (every §5 route from the spec exists in the router) would require a
-machine-readable spec, which doesn't exist yet.
+Comprehensive spec-coverage test (``test_spec_route_parity.py``) with 6 assertions:
+- Every "done" §5 route is in the router.
+- No deferred route is silently implemented (stale deferral → flip to done).
+- No surprise routes outside the spec.
+- Every done route has a CLI command in ROUTE_COMMAND_MAP.
+- Every mapped command is a registered argparse subcommand.
+- Every deferred route has a reason.
+
+Caught a real gap: ``levels-set`` and ``runs-list`` were in ROUTE_COMMAND_MAP but never
+registered as subparsers (the old parity test missed it). Fixed. Also added the standalone
+``fund checkconfig`` command (§6, for ``ExecStartPre`` — was missing entirely).
