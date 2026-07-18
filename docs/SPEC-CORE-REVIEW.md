@@ -623,3 +623,232 @@ The problems are in §5.2 cross-cutting, and one is severe.
 10. **Query-param and shape gaps** — `/coverage?exchange`, `/runs?type&coverage&limit`,
     `/events?since`, `/costs?since&by=day`, dossier file list + staleness, health
     leader/queue-depth/scheduler timestamp.
+
+---
+
+## §8 Module layout
+
+- **`core/config/*`, `core/orchestrator/*`, `core/scheduler/*`, `cli/*`,
+  `config/*.yaml.example`** — IMPLEMENTED. Every specced module exists. Two useful
+  un-specced additions the spec tree should absorb: `core/orchestrator/cross_check.py`
+  (backs §3.4) and `core/scheduler/scheduler.py` (the APScheduler wiring).
+- **`core/api/routes/` package split** — DEVIATES. The spec calls for
+  `routes/{coverage,runs,gates,queries,track_record,costs,health}.py`; the actual is a
+  single **810-line** monolith at `core/api/routes.py`, the third-largest file in the
+  repo. Its size is a direct cause of the uneven per-route test coverage in §9.4.
+- **Caveat on the §8 modules created by BUGS #3** — as recorded in §3.5 and §4 above,
+  `gates.py`, `budgets.py`, `calendar.py` and `format.py` all exist and all have tests,
+  but **none has a production caller**. §8 is satisfied as a file listing and not as
+  working structure.
+
+---
+
+## §9 Test plan
+
+**Totals:** 418 tests collected; 370 pass / 32 skipped in the default unit run. The 16
+integration tests are gated by `tests/integration/conftest.py:29` unless `-m integration`,
+and they **do** run in CI as a separate job against a testcontainers Postgres
+(`.github/workflows/ci.yml`). The CI unit job runs `pytest tests/unit` only.
+
+### §9.1 FakeRunner
+
+- **Scripted success / failure** — IMPLEMENTED. `tests/fakes/runner.py:60` claims through
+  the real `queue.claim_stage`, with canned per-role results and `fail_role`/`fail_times`.
+- **Hang / lease expiry** — PARTIAL. `hang_roles` exists (`tests/fakes/runner.py:74`) but
+  **no test in the suite ever passes it** — zero call sites. The lease-expiry path is
+  tested only at the repo layer (`test_review_paths.py:64`), never through the
+  orchestrator as §9.1 requires.
+- **Invalid `stage_result` emission** — MISSING. No knob; `_default_result` always returns
+  a valid shape, so the validation-error → desk-outbox path is untested.
+- **Retryable vs terminal** — DEVIATES. `fail_stage(..., retryable=True)` is hardcoded
+  (`tests/fakes/runner.py:83`); terminal failure is only ever reached by attempt
+  exhaustion, so a genuinely non-retryable failure is never exercised.
+
+### §9.2 Orchestrator
+
+- **Planner (all 7 shapes)** — IMPLEMENTED, genuine (`test_planner.py:20-114`).
+- **Auto cross-check (4 cases)** — IMPLEMENTED, genuine (`test_cross_check.py:19,33,47,60`
+  plus an integrated case at `test_engine.py:85`). The "prose cannot suppress its own
+  check" case is real. One of the better-tested mechanisms in the repo.
+- **Transient failure / resume** — IMPLEMENTED, genuine (`test_engine.py:154`).
+- **Per-ticker serialization** — IMPLEMENTED (`test_engine.py:184`).
+- **Rotation** — PARTIAL. `test_rotation.py:23` tests the pure ordering function only.
+  The specced behavior ("two consecutive initiations on the same coverage") is never
+  driven through the engine — consistent with the §3.2 finding that rotation is inert.
+- **Full happy path to gate** — PARTIAL. `test_engine.py:41` reaches `waiting_pm` + gate +
+  prediction + lock. The second half — `POST /gates/{id}/answer` → coverage `active`,
+  predictions `open`, branch merged, outbox rows — is **missing end-to-end**.
+- **`decide: reject`** — MISSING as an integrated test; see the side-effect finding below.
+- **Terminal failure** — PARTIAL. `test_engine.py:67` asserts run/coverage `failed` + lock
+  released, but not that the desk outbox row carries the validation errors (it cannot —
+  see the `RunStage.error` finding in §3.4).
+- **Lease expiry via FakeRunner** — MISSING (see §9.1). Cost-of-dead-attempt is unasserted.
+- **Budget cap → gate** — IMPLEMENTED (`test_engine.py:131`); **`raise_cap` resumes /
+  `cancel` cancels is MISSING** — only `allowed_answers` is asserted, never the effect.
+- **House daily cap** — MISSING entirely (config field only).
+
+### §9.3–§9.6 highlights
+
+- **No hardcoded models/prices** — IMPLEMENTED, genuine, with a real fires-test
+  (`tests/unit/test_no_hardcoded_models.py:55`). **The best-engineered guard in the repo**
+  and the model the other spec-coverage tests should follow.
+- **Route/CLI parity** — IMPLEMENTED and unusually strong (`test_spec_route_parity.py:75-116`).
+- **§9.4 "every mutating route: 403 / 400 / replay / 409"** — PARTIAL, and this is a big
+  gap. Only `POST /coverage` is tested (`test_api.py:27,38,47,70`). The other ~14 mutating
+  routes have **zero auth or idempotency tests**; the parity test only proves the route
+  object exists.
+- **§9.4 unhandled exception → 500 with redacted traceback** — PARTIAL. No test drives an
+  unhandled exception, which is why the empty-`request_id` bug at `app.py:58` survives.
+- **§9.3 config reload atomicity, houses upsert, `--strict` exit code** — MISSING.
+- **§9.5 leader lock under `tick()`** — MISSING. Job bodies are covered via an injected
+  predicate (`test_jobs.py:87`), but `tick()` under a held lock is never tested, and
+  `pg_try_advisory_lock` returns unconditional `True` on SQLite (`leader.py:21`), so unit
+  tests can never exercise the real lock. Only the Postgres integration test can.
+- **§9.6 budget reserve/settle race-free path** — MISSING (nothing to test yet).
+
+### Tautological / existence-only tests
+
+These pass while the mechanism beneath them is absent or inert. Per AGENTS.md they do not
+count as coverage, and several of them are actively misleading:
+
+- **`tests/unit/domain/test_coverage_sm.py:277,283,289`** — **the most damaging in the
+  repo (verified).** They assert `"supersede_predictions" in t.side_effects`,
+  `"merge_branch"`, `"predictions_open"` — *strings in a table asserted against strings in
+  a test*. `core/db/repo/coverage.py:209` no-ops all of them behind the comment "cross-module
+  or handled by the caller," and **there is no caller** (grep for the three names outside
+  `coverage_sm.py` and tests returns nothing). The suite reads as "reject supersedes
+  predictions" while nothing supersedes anything. The comment is also an AGENTS.md rule-3
+  violation: it describes wiring that does not exist anywhere.
+- **`tests/unit/scheduler/test_spec_coverage.py:31,36`** — `assert callable(...)` on
+  `session_tick`, `build_scheduler`, `run_job`. Pure importability; the docstring even
+  admits it only "proves they import." Passes if every body is `pass`.
+- **`tests/unit/scheduler/test_spec_coverage.py:27`** — `set(JOBS) == SECTION_4_CRON_JOBS`,
+  a dict-key set against a hardcoded set in the same repo. Five of those seven jobs raise
+  `NotImplementedError`, so this asserts the *names of unimplemented stubs*.
+- **`test_spec_coverage.py:42` and its exact duplicate `test_jobs.py:188`** — signature
+  introspection (`default is None`), written twice in two files.
+- **`tests/unit/domain/test_enums.py:10-57`** — each asserts an enum's `.value` set against
+  a literal copy of the same list. The claimed link to the DB CHECK constraints is never
+  verified against `models.py`.
+- **`tests/unit/test_section8_modules.py`** — exists to prove the §8 modules aren't empty;
+  `test_exchange_sessions` (`:39`) asserts a dict passthrough returns its own input, and
+  `test_terminal_gate_mapping` (`:33`) asserts a lookup table against itself.
+- **`tests/unit/api/test_api.py:96`** — `test_health` asserts `status == "ok"`, a literal
+  in `routes.py:554`. Cannot fail while the route exists; hides the three missing health fields.
+- **`tests/unit/test_spec_route_parity.py:114`** — asserts a non-empty string in the dict
+  literal directly above it.
+- **`tests/unit/db/test_fakes.py:24`** — collects twice and asserts the second collect
+  returns `completed`, the canned constant either way.
+
+### §8 / §9 gaps ranked by severity
+
+1. **`merge_branch` / `predictions_open` / `supersede_predictions` / `spawn_deep_review` /
+   `expire_open_predictions` / `write_coverage_levels` / `write_lead_history` are declared
+   in the SM and implemented nowhere**, guarded only by string-table tautologies. §9.2's
+   `decide: active` and `decide: reject` are effectively unimplemented.
+2. **The gate-answer half of the happy path is untested end-to-end**, including
+   `raise_cap`/`cancel` on a budget gate.
+3. **~14 mutating routes have no auth or idempotency tests** — §9.4 says "every mutating
+   route."
+4. **`hang_roles` is dead** — the FakeRunner's lease-expiry keystone has zero call sites,
+   so the reaper scenario is unproven at the orchestrator level.
+5. **Split `core/api/routes.py` (810 lines) into the specced `routes/` package.**
+6. **Replace the existence-only scheduler assertions with behavior tests** — they
+   currently make five `NotImplementedError` stubs read as covered.
+7. **Config reload atomicity, houses upsert, `--strict` exit code** — no code, no tests.
+8. **500-path `request_id`** is empty and untested.
+
+---
+
+## Synthesis
+
+### The one-line summary
+
+**The parts that exist are largely well-built; the problem is that the top-level loops
+that would run them do not exist.** Neither `engine.tick` nor `build_scheduler` has a
+production caller, and nothing reads the operator's config files from disk. SPEC-CORE
+describes a service; what exists is a well-tested library that no process invokes.
+
+### What is genuinely good
+
+Worth stating plainly, because the gap list below is long:
+
+- **Idempotency-Key handling** (`deps.py:91-100`) — complete, correct, removal-sensitive tests.
+- **Audit logging** on all 15 mutating handlers, correctly ordered against replay.
+- **The `no_hardcoded_models` guard** — a real fires-test; the template for the rest.
+- **The advisory-lock contention test** on Postgres — a real fires-test.
+- **Route/CLI parity** (BUGS #5) — bidirectional, catches real drift, and did catch a real gap.
+- **The read models added by BUGS #1** — genuine queries, not stubs. That claim holds up.
+- **The planner and cross-check** — pure, deterministic, honestly tested.
+- **The five `NotImplementedError` job skeletons** — the *correct* way to stub: loud, not
+  silent, exactly per AGENTS.md rule 3.
+
+### The recurring failure pattern
+
+Three review rounds have now produced the same shape, and it is worth naming precisely
+because it keeps recurring in a new costume:
+
+> **A mechanism is built and tested in isolation, then never connected — and the test
+> written to guard it asserts its existence rather than its effect, so the disconnection
+> is invisible.**
+
+The inventory of mechanisms that are implemented, tested, and have **no production
+caller**: `engine.tick`, `build_scheduler`, `reap_expired`, `resolve_provider_keys`,
+`gates.terminal_gate`, `budgets.run_over_budget`, `budgets.pause_for_budget`,
+`calendar.exchange_sessions`, `cli.format.table`, `hang_roles`, `ORCHESTRATOR_KEY`, and
+the seven coverage-SM side effects.
+
+BUGS #3 is the clearest instance: it created the four §8 modules *and tests for them*, and
+all four are dead code. The spec-coverage test pattern — introduced in the last round
+specifically to catch missing implementations — has itself degraded into the box-ticking
+it was meant to prevent, because `assert callable(f)` and `assert set(JOBS) == {...}`
+are existence assertions, not behavior assertions.
+
+**The fix is a rule, not a list.** AGENTS.md already says a safety mechanism needs a
+production caller and a test that fails when it is removed. It should add:
+
+> **A spec-coverage test must assert behavior, never existence.** `assert callable(f)`,
+> `assert set(REGISTRY) == {...}`, and asserting a lookup table against its own literal
+> are not coverage. If the test would still pass with the function body replaced by
+> `pass` or `raise NotImplementedError`, it is not a test.
+
+And a mechanical guard worth adding: **a test that asserts every public symbol in
+`core/orchestrator/`, `core/scheduler/` and `cli/format.py` has at least one non-test
+caller.** That single test would have caught eleven of the twelve dead mechanisms above.
+
+### Recommended order of work
+
+Ordered by "what unblocks the most" rather than by section number:
+
+1. **Write the core service entrypoint** — a process that loads config from
+   `/etc/ai-fund/`, builds the scheduler, and runs `engine.tick` on a loop under the
+   orchestrator advisory lock. Without this nothing else in SPEC-CORE runs at all, and
+   several findings below cannot even be observed.
+2. **Fix the two live security/correctness bugs**: bearer token on read routes
+   (`app.py:62`) and the never-released advisory lock (no `pg_advisory_unlock` anywhere).
+   The second one silently disables the scheduler after its first job, so it will bite the
+   moment item 1 lands.
+3. **Add the config read path** — `AI_FUND_CONFIG_DIR`, `env_file`, reading the three
+   YAMLs from disk, `provider_keys` population, and the `redact()` helper. Fix the
+   `queue.backoff` nested/flat mismatch while in there.
+4. **Wire the disconnected mechanisms** — `reap_expired` into `tick`, `terminal_gate` into
+   `finalize_run` (so `lead_review`/`distillation` open their gates), `budgets.*` in place
+   of the engine's private copies, `calendar` into scheduler registration, rotation's
+   `last_used_at` from stage rows.
+5. **Implement the seven coverage-SM side effects**, or move them out of the SM table and
+   delete the tautological tests that guard them. Either is honest; the current state is not.
+6. **Close the §9.4 test gap** — auth/idempotency for all mutating routes, a CLI smoke
+   test that drives `run()` for all 26 commands, and read-model assertions against seeded
+   rows.
+7. **Then** the per-house daily budgets (BUGS #4), the `routes/` package split, and the
+   remaining shape/param gaps.
+
+### A note on BUGS.md accuracy
+
+BUGS #1, #2, #3 and #5 are all marked DONE. On the evidence, #1, #2 and #5 are
+legitimately done. **#3 should be reopened**: the §8 modules were created but none is
+called, which by the repo's own definition-of-done ("at least one production caller?")
+means it is not done. **#4's "DEFERRED" understates the scope** — it reads as though only
+reserve/settle logic is missing, but the midnight-UTC unclaimable window and the
+once-per-house-per-day desk notice are also absent, and nothing reads or writes
+`house_budget_days` at all.
