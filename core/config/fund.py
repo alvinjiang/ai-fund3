@@ -15,7 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class RunPolicy(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    max_attempts: int = 3
+    # max_attempts is required: SPEC §4.8 ("from config at creation") + AGENTS.md's
+    # no-silent-fallback rule — fund.yaml must state it for every run type, enforced at load.
+    max_attempts: int
     budget_cap_usd: Decimal = Decimal("0")
     stage_timeout_s: int = 7200
     verify_count: int = 2  # initiation only

@@ -87,7 +87,9 @@ def test_finish_run_releases_lock_and_emits_outbox(session):
         doctrine_version_id=None,
     )
     runs_repo.add_stages(
-        session, r.id, [StageIn(seq=1, role="author", house="gpt", substrate="harness")]
+        session,
+        r.id,
+        [StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3)],
     )
     runs_repo.start_run(session, r.id)
     runs_repo.finish_run(session, r.id, status="succeeded", summary="ok")
@@ -159,8 +161,15 @@ def test_add_stages_materializes_seq_and_house(session):
         session,
         r.id,
         [
-            StageIn(seq=1, role="author", house="gpt", substrate="harness"),
-            StageIn(seq=2, role="verifier", house="gemini", substrate="harness", depends_on_seq=1),
+            StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3),
+            StageIn(
+                seq=2,
+                role="verifier",
+                house="gemini",
+                substrate="harness",
+                depends_on_seq=1,
+                max_attempts=3,
+            ),
         ],
     )
     assert [s.seq for s in stages] == [1, 2]

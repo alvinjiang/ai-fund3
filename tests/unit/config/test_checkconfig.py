@@ -25,7 +25,9 @@ def _config(with_price: bool = True, *, models: dict | None = None) -> Config:
                 )
             }
         ),
-        fund=FundConfig(runs={"initiation": RunPolicy(budget_cap_usd=Decimal("40"))}),
+        fund=FundConfig(
+            runs={"initiation": RunPolicy(max_attempts=3, budget_cap_usd=Decimal("40"))}
+        ),
         pricing=PricingConfig(
             models={}
             if not with_price

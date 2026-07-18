@@ -44,7 +44,9 @@ def test_requeue_run_keeps_the_coverage_lock(session):
         doctrine_version_id=None,
     )
     runs_repo.add_stages(
-        session, r.id, [StageIn(seq=1, role="author", house="gpt", substrate="harness")]
+        session,
+        r.id,
+        [StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3)],
     )
     assert runs_repo.start_run(session, r.id) is True
     lock = session.query(models.CoverageRunLock).filter_by(coverage_id=c.id).one()
@@ -72,7 +74,9 @@ def test_reap_expired_writes_kill_reason_on_the_closed_attempt(session):
         doctrine_version_id=None,
     )
     runs_repo.add_stages(
-        session, r.id, [StageIn(seq=1, role="author", house="gpt", substrate="harness")]
+        session,
+        r.id,
+        [StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3)],
     )
     runs_repo.start_run(session, r.id)
     stage = queue.claim_stage(session, "w1", lease_seconds=300)
@@ -112,7 +116,10 @@ def test_monitor_tick_starts_against_an_already_held_lock(session):
         budget_cap_usd=None,
         doctrine_version_id=None,
     )
-    # monitor_tick is non-mutating -> starts immediately, takes no lock, adds no lock row
+    # BUGS #3 confirmation: monitor_tick is non-mutating by DERIVATION from run type, never
+    # the column default (the server_default=true is the fail-safe; prove it's unreachable).
+    assert mt.mutates_dossier is False
+    # -> starts immediately, takes no lock, adds no lock row even with the lock held
     assert runs_repo.start_run(session, mt.id) is True
     session.refresh(mt)
     assert mt.status == "running"

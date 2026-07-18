@@ -98,7 +98,9 @@ def test_concurrent_prediction_registration_is_idempotent(factory):
         doctrine_version_id=None,
     )
     runs_repo.add_stages(
-        setup, r.id, [StageIn(seq=1, role="author", house="gpt", substrate="harness")]
+        setup,
+        r.id,
+        [StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3)],
     )
     runs_repo.start_run(setup, r.id)
     stage_id = setup.query(models.RunStage).filter_by(run_id=r.id).one().id
@@ -163,7 +165,9 @@ def test_run_delete_cascades_to_stages_and_attempts(session):
         doctrine_version_id=None,
     )
     runs_repo.add_stages(
-        session, r.id, [StageIn(seq=1, role="author", house="gpt", substrate="harness")]
+        session,
+        r.id,
+        [StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3)],
     )
     # NB: no start_run — a held coverage_run_lock would (correctly) RESTRICT the run delete;
     # this test isolates the sanctioned run -> run_stages CASCADE.

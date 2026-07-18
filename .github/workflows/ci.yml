@@ -28,20 +28,10 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_PASSWORD: t
-          POSTGRES_DB: test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    # No `services: postgres` here — the suite starts its own disposable Postgres via
+    # testcontainers (Docker is available on the runner). CORE_API_TOKEN/ARTIFACTS_DIR are
+    # required by Settings (alembic env.py reads get_settings()); the suite sets DATABASE_URL.
     env:
-      DATABASE_URL: postgresql://postgres:t@localhost:5432/test
       CORE_API_TOKEN: ci-tok
       ARTIFACTS_DIR: /tmp/ai-fund-artifacts
     steps:
@@ -53,7 +43,5 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      # testcontainers (used by the suite) needs no Docker-in-Docker here: the service
-      # postgres above is for any direct DATABASE_URL use; the suite starts its own container.
       - name: integration tests
         run: pytest -m integration -q

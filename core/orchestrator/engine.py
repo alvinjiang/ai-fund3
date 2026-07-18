@@ -218,7 +218,9 @@ def _maybe_append_cross_check(
                 status="queued",
                 depends_on_seq=stage.seq,
                 available_at=utc_now(),
-                max_attempts=3,
+                # from run policy (event_analysis), not a literal — same source as every
+                # other stage so a config change to max_attempts applies uniformly.
+                max_attempts=fund.policy(run.type).max_attempts,
             )
         )
 

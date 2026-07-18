@@ -51,7 +51,9 @@ def test_prediction_price_six_dp_round_trips_exactly(session):
         doctrine_version_id=None,
     )
     runs_repo.add_stages(
-        session, r.id, [StageIn(seq=1, role="author", house="gpt", substrate="harness")]
+        session,
+        r.id,
+        [StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3)],
     )
     runs_repo.start_run(session, r.id)
     stage = session.query(models.RunStage).filter_by(run_id=r.id).one()

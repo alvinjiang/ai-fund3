@@ -28,7 +28,7 @@ class StageIn:
     role: str
     house: str
     substrate: str
-    max_attempts: int = 3
+    max_attempts: int  # required — resolved from run policy at creation (SPEC §4.8)
     depends_on_seq: int | None = None
 
 

@@ -26,7 +26,7 @@ def plan_stages(
     monitor_house: str | None = None,
     meta_house: str | None = None,
     meta_houses: set[str] | None = None,
-    max_attempts: int = 3,
+    max_attempts: int,  # required — resolved from run policy by the caller (SPEC §4.8)
 ) -> list[StageIn]:
     contributors = list(contributors or [])
     meta_houses = set(meta_houses or set())

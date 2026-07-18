@@ -39,7 +39,7 @@ def _seed_run(session, n_stages=5):
         session,
         r.id,
         [
-            StageIn(seq=i, role="author", house="gpt", substrate="harness")
+            StageIn(seq=i, role="author", house="gpt", substrate="harness", max_attempts=3)
             for i in range(1, n_stages + 1)
         ],
     )
@@ -101,8 +101,15 @@ def test_dependency_gating(factory):
         s,
         run.id,
         [
-            StageIn(seq=1, role="author", house="gpt", substrate="harness"),
-            StageIn(seq=2, role="verifier", house="gpt", substrate="harness", depends_on_seq=1),
+            StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3),
+            StageIn(
+                seq=2,
+                role="verifier",
+                house="gpt",
+                substrate="harness",
+                depends_on_seq=1,
+                max_attempts=3,
+            ),
         ],
     )
     runs_repo.start_run(s, run.id)

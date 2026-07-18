@@ -38,7 +38,9 @@ def _setup(session):
         doctrine_version_id=None,
     )
     runs_repo.add_stages(
-        session, r.id, [StageIn(seq=1, role="author", house="gpt", substrate="harness")]
+        session,
+        r.id,
+        [StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3)],
     )
     runs_repo.start_run(session, r.id)
     return c, r
@@ -62,7 +64,9 @@ def test_claim_returns_none_when_no_run_running(session):
         doctrine_version_id=None,
     )
     runs_repo.add_stages(
-        session, r.id, [StageIn(seq=1, role="author", house="gpt", substrate="harness")]
+        session,
+        r.id,
+        [StageIn(seq=1, role="author", house="gpt", substrate="harness", max_attempts=3)],
     )
     assert queue.claim_stage(session, "w1", lease_seconds=300) is None
 
@@ -108,7 +112,7 @@ def test_cost_rollup_counts_failed_attempts(session):
 
 def test_fail_stage_terminal_when_attempts_exhausted(session):
     _c, r = _setup(session)
-    # max_attempts defaults to 3
+    # _setup's stage is created with max_attempts=3 (stated explicitly now)
     stage = queue.claim_stage(session, "w1", lease_seconds=300)  # attempt 1
     queue.fail_stage(session, stage.id, AttemptIn(worker_id="w1"), retryable=True, backoff=NO_DELAY)
     stage = queue.claim_stage(session, "w1", lease_seconds=300)  # attempt 2
