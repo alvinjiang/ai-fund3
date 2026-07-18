@@ -46,8 +46,20 @@ Also binding: TDD (test first, watch it fail, then implement). Every change gets
 word "complete"** unless every named mechanism has a test proving it fires. Run
 `pytest tests/unit` after each meaningful change; the baseline is 371 passed / 32 skipped.
 
-**One branch per phase, PR-reviewed before merge**, against
-`docs/BUILD_REVIEW_CHECKLISTS.md`. Each phase must leave the suite green on its own.
+**Branch and review gate.** There is no PR process in this repo — do not open one, and do
+not wait on one. Work on `spec-core-remediation`, branched from `spec-core-truthing`, with
+**one commit per phase** (squash your working commits before finishing a phase). Do not
+merge to `main`; that decision is the PM's, and nothing has been merged yet.
+
+The gate is not a PR, it is a reading:
+
+1. You self-review the phase against `docs/BUILD_REVIEW_CHECKLISTS.md` — use the section
+   for the area you touched as the focus list.
+2. You write the phase's `NOTES.md` entry (see "Reporting back" below).
+3. A reviewing agent audits the branch against the spec and folds findings into `BUGS.md`.
+
+Each phase must leave `pytest tests/unit` green on its own — a phase that ends red is not
+finished, and the next phase does not start on top of it.
 
 ---
 

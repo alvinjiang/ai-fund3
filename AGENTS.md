@@ -35,10 +35,17 @@
 
 **Workflow (carry over from v2 — they worked):**
 - Spec → implement. Each feature gets a self-contained `specs/SPEC-*.md` first
-  (strongest reasoning model tier), then a BUILD branch implements it. One branch per
-  spec; PR review before merge — **review against
-  `docs/BUILD_REVIEW_CHECKLISTS.md`** (per-spec criteria written in advance by the
-  spec-review tier; use its section for the branch as the review's focus areas).
+  (strongest reasoning model tier), then a BUILD branch implements it. One branch per spec.
+- **There is no PR process and nothing has been merged to `main` yet.** Do not open PRs,
+  do not merge — merging is the PM's call. The review gate is a reading, not a PR: the
+  implementor self-reviews against **`docs/BUILD_REVIEW_CHECKLISTS.md`** (per-spec criteria
+  written in advance by the spec-review tier; use the section for the branch as the focus
+  areas) and writes `NOTES.md`; a reviewing agent then audits the branch and folds findings
+  into `BUGS.md`.
+- **Document roles.** `BUGS.md` is the reviewer's tracker — implementors cite item numbers
+  ("closes BUGS #7") and do not edit it. `NOTES.md` is the implementor's channel back:
+  dated entries covering what fires now that didn't before (name the test), decisions taken
+  and why, questions the specs don't answer, and explicit deferred/missing lists.
 - Every change gets a dated `NOTES.md` entry (date, reason, affected files). `README.md`
   is updated on every feature branch.
 - TDD. Run `pytest tests/` after each meaningful change.

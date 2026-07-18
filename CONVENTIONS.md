@@ -8,7 +8,9 @@ anything here disagrees with `AGENTS.md`, `AGENTS.md` wins. Keep this file short
 
 - **Spec → implement.** Each feature gets a self-contained `specs/SPEC-*.md` first
   (strongest reasoning tier), then a BUILD branch implements it.
-- **One branch per spec; PR review before merge.** Branch names: `spec-<topic>`.
+- **One branch per spec.** Branch names: `spec-<topic>`. There is no PR process — the
+  review gate is a reviewing-agent pass over the branch against
+  `docs/BUILD_REVIEW_CHECKLISTS.md`. Merging to `main` is the PM's call.
 - **TDD.** Run `pytest` after each meaningful change.
 - **Every change gets a dated `NOTES.md` entry** (date, reason, affected files).
   `README.md` is updated on every feature branch.
