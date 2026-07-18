@@ -13,6 +13,8 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from core.db import models
@@ -41,6 +43,12 @@ def _key(stage_id: UUID, e: PredictionIn) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def _conflict_insert(session: Session, model: type) -> Any:
+    """Dialect-aware INSERT supporting ON CONFLICT DO NOTHING (PG + SQLite)."""
+    name = session.get_bind().dialect.name
+    return pg_insert(model) if name == "postgresql" else sqlite_insert(model)
+
+
 def register_from_stage(
     session: Session, stage_id: UUID, entries: list[PredictionIn]
 ) -> list[models.Prediction]:
@@ -49,35 +57,39 @@ def register_from_stage(
     out: list[models.Prediction] = []
     for e in entries:
         key = _key(stage_id, e)
-        existing = session.scalar(
+        values = {
+            "coverage_id": run.coverage_id,
+            "run_id": stage.run_id,
+            "stage_id": stage_id,
+            "house": stage.house,  # identity copied from the stage, never model output
+            "kind": e.kind,
+            "value": e.value,
+            "currency": e.currency,
+            "stance": e.stance,
+            "scenario_label": e.scenario_label,
+            "scenario_prob": e.scenario_prob,
+            "scenario_group": e.scenario_group,
+            "horizon_date": e.horizon_date,
+            "confidence": e.confidence,  # NULL if the model did not state one
+            "rationale_ref": e.rationale_ref,
+            "direction": e.direction,
+            "pinned_price": e.pinned_price,
+            "status": PredictionStatus.OPEN.value,
+            "idempotency_key": key,
+        }
+        # ON CONFLICT DO NOTHING so concurrent replays of the same stage cannot raise
+        # (SPEC §4.12 item 3); re-select returns the winning row either way.
+        stmt = (
+            _conflict_insert(session, models.Prediction)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=["idempotency_key"])
+        )
+        session.execute(stmt)
+        row = session.scalar(
             select(models.Prediction).where(models.Prediction.idempotency_key == key)
         )
-        if existing is not None:
-            out.append(existing)  # idempotent replay of the same stage's result
-            continue
-        p = models.Prediction(
-            coverage_id=run.coverage_id,
-            run_id=stage.run_id,
-            stage_id=stage_id,
-            house=stage.house,  # identity copied from the stage, never from model output
-            kind=e.kind,
-            value=e.value,
-            currency=e.currency,
-            stance=e.stance,
-            scenario_label=e.scenario_label,
-            scenario_prob=e.scenario_prob,
-            scenario_group=e.scenario_group,
-            horizon_date=e.horizon_date,
-            confidence=e.confidence,  # NULL if the model did not state one
-            rationale_ref=e.rationale_ref,
-            direction=e.direction,
-            pinned_price=e.pinned_price,
-            status=PredictionStatus.OPEN.value,
-            idempotency_key=key,
-        )
-        session.add(p)
-        session.flush()
-        out.append(p)
+        out.append(row)
+    session.flush()
     return out
 
 

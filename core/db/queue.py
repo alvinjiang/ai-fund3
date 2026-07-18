@@ -9,6 +9,7 @@ attempt — failed attempts count toward the stage and run rollups (invariant 3)
 
 from __future__ import annotations
 
+import random
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session, aliased
 from core.db import models
 from core.db.schemas import AttemptIn
 from core.db.types import utc_now
+from core.domain.backoff import BackoffPolicy, backoff_seconds
 from core.domain.enums import RunStatus, StageStatus
 from core.domain.run_sm import StageAction, StageTransitionContext, stage_transition
 
@@ -55,7 +57,7 @@ def claim_stage(
             ),
         )
         .order_by(models.Run.priority.desc(), models.Run.created_at, models.RunStage.seq)
-        .with_for_update(skip_locked=True)
+        .with_for_update(skip_locked=True, of=models.RunStage)
         .limit(1)
     )
     if substrates:
@@ -142,6 +144,12 @@ def _rollup_run(session: Session, run_id: UUID) -> None:
     run.cost_usd = total
 
 
+def _next_available_at(attempts: int, backoff: BackoffPolicy):
+    """§6.2: exponential with jitter. Randomness is applied here, at the edge."""
+    delay = backoff_seconds(attempts, backoff, jitter_factor=random.uniform(-1.0, 1.0))
+    return utc_now() + timedelta(seconds=delay)
+
+
 def _release_claim(stage: models.RunStage) -> None:
     stage.claimed_by = None
     stage.claimed_at = None
@@ -167,9 +175,16 @@ def complete_stage(session: Session, stage_id: UUID, attempt: AttemptIn, result:
     session.flush()
 
 
-def fail_stage(session: Session, stage_id: UUID, attempt: AttemptIn, retryable: bool) -> None:
+def fail_stage(
+    session: Session,
+    stage_id: UUID,
+    attempt: AttemptIn,
+    retryable: bool,
+    *,
+    backoff: BackoffPolicy,
+) -> None:
     stage = session.get(models.RunStage, stage_id)
-    _close_attempt(session, stage, attempt, status="failed")
+    _close_attempt(session, stage, attempt, status="failed", kill_reason=attempt.kill_reason)
     can_retry = retryable and stage.attempts < stage.max_attempts
     if can_retry:
         sm = stage_transition(
@@ -178,7 +193,10 @@ def fail_stage(session: Session, stage_id: UUID, attempt: AttemptIn, retryable: 
             StageTransitionContext(attempts=stage.attempts, max_attempts=stage.max_attempts),
         )
         stage.status = sm.to_state.value
-        stage.available_at = utc_now()  # backoff is config-driven (SPEC-CORE); no delay here
+        if "set_available_at_backoff" in sm.side_effects:
+            stage.available_at = _next_available_at(stage.attempts, backoff)
+        else:
+            stage.available_at = utc_now()
     else:
         stage.status = StageStatus.FAILED.value
         stage.finished_at = utc_now()
@@ -187,7 +205,7 @@ def fail_stage(session: Session, stage_id: UUID, attempt: AttemptIn, retryable: 
     session.flush()
 
 
-def reap_expired(session: Session, now: Any) -> list[UUID]:
+def reap_expired(session: Session, now: Any, *, backoff: BackoffPolicy) -> list[UUID]:
     """Return stages whose lease lapsed; requeue under max_attempts, else fail."""
     expired = session.scalars(
         select(models.RunStage).where(
@@ -209,7 +227,7 @@ def reap_expired(session: Session, now: Any) -> list[UUID]:
             a.finished_at = utc_now()
         if stage.attempts < stage.max_attempts:
             stage.status = StageStatus.QUEUED.value
-            stage.available_at = utc_now()
+            stage.available_at = _next_available_at(stage.attempts, backoff)
         else:
             stage.status = StageStatus.FAILED.value
             stage.finished_at = utc_now()

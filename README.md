@@ -46,10 +46,15 @@ the meta role (doctrine distillation, track-record review) — it is not an anal
   `core.md`, `sections/`, `lessons/`, `report/`, `templates/`.
 - `proprietary/` — doctrine source + gold-standard report zips (gitignored; never commit).
 - `specs/` — self-contained specs produced by SPEC steps.
-- `core/` `runner/` `adapter/` `cli/` — the v3 code (core service, harness runner,
-  Mattermost adapter, CLI).
+- `core/` `runner/` `adapter/` `cli/` — the v3 code. `core/` holds the service:
+  `core/db/` (SQLAlchemy models, alembic baseline, the Postgres queue, repositories),
+  `core/domain/` (the coverage/run/stage state machines — pure), `core/orchestrator/`
+  (run planner + engine), `core/api/` (FastAPI core API), `core/config/` + `core/scheduler/`.
+  `runner/` and `adapter/` arrive in phases 2 and 5; `cli/` is the `fund` CLI.
+- `alembic.ini` + `core/db/migrations/` — the schema baseline (`alembic upgrade head`).
 - `dossiers/` — separate git repo; one dir per ticker, git-versioned memory of every run.
-- `tests/` — unit tests (network-blocked by default) + integration tests (opt-in).
+- `tests/` — unit tests (network-blocked by default), `tests/integration/` (Postgres,
+  opt-in via `-m integration`), and `tests/fakes/` (shared fakes incl. `FakeRunner`).
 - `PROMPTS.md` — the single execution file (phases 0–7).
 
 v2 source (for porting) lives at `/home/alvin/aicode/ai-fund` and keeps running until

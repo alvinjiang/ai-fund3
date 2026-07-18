@@ -2,13 +2,14 @@
 
 Transactional-outbox publish/consume/ack/nack. The adapter consumes through the core
 API (SPEC-ADAPTER §5.1) rather than touching Postgres directly; this module owns the
-SKIP LOCKED claim + lease + backoff. Concurrent consume exclusivity is integration-tested.
+SKIP LOCKED claim + lease + backoff. (``consume`` uses ``FOR UPDATE SKIP LOCKED`` which
+SQLite silently drops, so its exclusivity is only exercised under Postgres — see
+``tests/integration/db/test_outbox_pg.py``.)
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -90,7 +91,11 @@ def nack(session: Session, event_id: UUID, error: str, backoff_seconds: float) -
     session.flush()
 
 
-def pending_count(session: Session) -> Any:
-    return session.scalar(
-        select(models.OutboxEvent.id).where(models.OutboxEvent.delivered_at.is_(None)).limit(1)
+def pending_exists(session: Session) -> bool:
+    """True if any outbox row is undelivered (a health/queue-depth probe, not a count)."""
+    return (
+        session.scalar(
+            select(models.OutboxEvent.id).where(models.OutboxEvent.delivered_at.is_(None)).limit(1)
+        )
+        is not None
     )

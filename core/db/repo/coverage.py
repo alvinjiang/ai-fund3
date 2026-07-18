@@ -175,12 +175,6 @@ def _record(
                     dedupe_key=f"{kind}:{cov.id}:{uuid4().hex}",
                 )
             )
-        elif eff == "acquire_lock":
-            session.add(
-                models.CoverageRunLock(coverage_id=cov.id, run_id=run_id, acquired_at=utc_now())
-            )
-        elif eff == "release_lock":
-            session.query(models.CoverageRunLock).filter_by(coverage_id=cov.id).delete()
         elif eff == "cancel_open_gate":
             session.query(models.PmGate).filter_by(run_id=run_id, state="open").update(
                 {"state": "cancelled"}
@@ -288,6 +282,7 @@ def set_lead(
         raise IllegalTransition(None, Action.SET_LEAD, "coverage not found")
     h = session.get(models.House, house)
     ctx = TransitionContext(
+        new_house_enabled=bool(h and h.enabled),
         new_house_assignable=bool(h and h.assignable),
         new_house_meta=bool(h and h.meta),
     )

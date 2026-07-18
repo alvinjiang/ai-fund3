@@ -64,6 +64,7 @@ def create_run(
         "lead": lead,
         "contributors": contributors,
         "meta_houses": meta_houses,
+        "max_attempts": policy.max_attempts,
     }
     if run_type == "initiation":
         stages = plan_stages(
@@ -75,11 +76,17 @@ def create_run(
     elif run_type == "deep_review":
         stages = plan_stages("deep_review", **common)
     elif run_type == "event_analysis":
-        stages = plan_stages("event_analysis", lead=lead, meta_houses=meta_houses)
+        stages = plan_stages(
+            "event_analysis", lead=lead, meta_houses=meta_houses, max_attempts=policy.max_attempts
+        )
     elif run_type == "monitor_tick":
-        stages = plan_stages("monitor_tick", monitor_house=fund.monitor.house)
+        stages = plan_stages(
+            "monitor_tick", monitor_house=fund.monitor.house, max_attempts=policy.max_attempts
+        )
     elif run_type == "pm_query":
-        stages = plan_stages("pm_query", lead=lead, meta_houses=meta_houses)
+        stages = plan_stages(
+            "pm_query", lead=lead, meta_houses=meta_houses, max_attempts=policy.max_attempts
+        )
     elif run_type == "lead_review":
         stages = plan_stages("lead_review", lead=lead, contributors=contributors)
     elif run_type == "distillation":

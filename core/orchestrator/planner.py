@@ -26,6 +26,7 @@ def plan_stages(
     monitor_house: str | None = None,
     meta_house: str | None = None,
     meta_houses: set[str] | None = None,
+    max_attempts: int = 3,
 ) -> list[StageIn]:
     contributors = list(contributors or [])
     meta_houses = set(meta_houses or set())
@@ -34,68 +35,62 @@ def plan_stages(
         if house is not None and house in meta_houses:
             raise PlanError(f"a meta house ({house}) cannot fill an analyst role")
 
+    def stage(
+        seq: int, role: str, house: str | None, substrate: str, *, depends_on_seq: int | None = None
+    ) -> StageIn:
+        return StageIn(
+            seq=seq,
+            role=role,
+            house=house,
+            substrate=substrate,
+            max_attempts=max_attempts,
+            depends_on_seq=depends_on_seq,
+        )
+
     if run_type == "initiation":
         chk(lead)
-        stages: list[StageIn] = [StageIn(seq=1, role="author", house=lead, substrate="harness")]
+        stages: list[StageIn] = [stage(1, "author", lead, "harness")]
         verifiers = pick_verifiers(order_contributors(contributors, {}), verify_count)
         seq = 2
         for c in verifiers:
             chk(c)
-            stages.append(
-                StageIn(
-                    seq=seq, role="verifier", house=c, substrate="harness", depends_on_seq=seq - 1
-                )
-            )
+            stages.append(stage(seq, "verifier", c, "harness", depends_on_seq=seq - 1))
             seq += 1
         if include_data_checker:
             dc = contributors[0] if contributors else lead
-            stages.append(
-                StageIn(
-                    seq=seq,
-                    role="data_checker",
-                    house=dc,
-                    substrate="harness",
-                    depends_on_seq=seq - 1,
-                )
-            )
+            stages.append(stage(seq, "data_checker", dc, "harness", depends_on_seq=seq - 1))
             seq += 1
-        stages.append(
-            StageIn(
-                seq=seq, role="finalizer", house=lead, substrate="harness", depends_on_seq=seq - 1
-            )
-        )
+        stages.append(stage(seq, "finalizer", lead, "harness", depends_on_seq=seq - 1))
         return stages
 
     if run_type == "deep_review":
         chk(lead)
-        stages = [StageIn(seq=1, role="author", house=lead, substrate="harness")]
+        stages = [stage(1, "author", lead, "harness")]
         v = pick_verifiers(order_contributors(contributors, {}), 1)
         if v:
             chk(v[0])
-            stages.append(
-                StageIn(seq=2, role="verifier", house=v[0], substrate="harness", depends_on_seq=1)
-            )
+            stages.append(stage(2, "verifier", v[0], "harness", depends_on_seq=1))
         return stages
 
     if run_type == "event_analysis":
         chk(lead)
-        return [StageIn(seq=1, role="author", house=lead, substrate="harness")]
+        return [stage(1, "author", lead, "harness")]
 
     if run_type == "monitor_tick":
-        return [StageIn(seq=1, role="monitor", house=monitor_house or lead, substrate="api")]
+        return [stage(1, "monitor", monitor_house or lead, "api")]
 
     if run_type == "pm_query":
         chk(lead)
-        return [StageIn(seq=1, role="pm_query", house=lead, substrate="api")]
+        return [stage(1, "pm_query", lead, "api")]
 
     if run_type == "lead_review":
         out: list[StageIn] = []
         for i, c in enumerate(contributors, start=1):
             chk(c)
-            out.append(StageIn(seq=i, role="lead_review", house=c, substrate="api"))
+            out.append(stage(i, "lead_review", c, "api"))
         return out
 
     if run_type == "distillation":
-        return [StageIn(seq=1, role="distiller", house=meta_house, substrate="harness")]
+        return [stage(1, "distiller", meta_house, "harness")]
 
     raise PlanError(f"unknown run type {run_type!r}")

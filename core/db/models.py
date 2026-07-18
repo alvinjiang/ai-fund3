@@ -94,7 +94,7 @@ class Coverage(Base, TimestampMixin):
 class CoverageContributor(Base):
     __tablename__ = "coverage_contributors"
     coverage_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("coverage.id", ondelete="CASCADE"), primary_key=True
+        Uuid, ForeignKey("coverage.id", ondelete="RESTRICT"), primary_key=True
     )
     house: Mapped[str] = mapped_column(
         String(32), ForeignKey("houses.key", ondelete="RESTRICT"), primary_key=True
@@ -109,7 +109,7 @@ class CoverageLevel(Base):
     __tablename__ = "coverage_levels"
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     coverage_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("coverage.id", ondelete="CASCADE"), nullable=False
+        Uuid, ForeignKey("coverage.id", ondelete="RESTRICT"), nullable=False
     )
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     value: Mapped[Any] = mapped_column(Price, nullable=False)
@@ -136,7 +136,7 @@ class CoverageTransition(Base):
     __tablename__ = "coverage_transitions"
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     coverage_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("coverage.id", ondelete="CASCADE"), nullable=False
+        Uuid, ForeignKey("coverage.id", ondelete="RESTRICT"), nullable=False
     )
     from_state: Mapped[str | None] = mapped_column(String(24))
     to_state: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -157,7 +157,7 @@ class CoverageLeadHistory(Base):
     __tablename__ = "coverage_lead_history"
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     coverage_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("coverage.id", ondelete="CASCADE"), nullable=False
+        Uuid, ForeignKey("coverage.id", ondelete="RESTRICT"), nullable=False
     )
     from_house: Mapped[str | None] = mapped_column(ForeignKey("houses.key", ondelete="RESTRICT"))
     to_house: Mapped[str] = mapped_column(
@@ -183,7 +183,9 @@ class Run(Base, TimestampMixin):
     trigger: Mapped[str] = mapped_column(String(32), nullable=False)
     trigger_ref: Mapped[str | None] = mapped_column(String(128))
     priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("100"))
-    mutates_dossier: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    mutates_dossier: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
     requested_by: Mapped[str | None] = mapped_column(String(64))
     params: Mapped[Any] = mapped_column(JsonType, nullable=False)
     doctrine_version_id: Mapped[UUID | None] = mapped_column(
@@ -446,7 +448,7 @@ class Disagreement(Base):
     lead_house: Mapped[str] = mapped_column(
         String(32), ForeignKey("houses.key", ondelete="RESTRICT"), nullable=False
     )
-    material: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    material: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     lead_position: Mapped[str] = mapped_column(Text, nullable=False)
     challenger_position: Mapped[str] = mapped_column(Text, nullable=False)
     key_numbers: Mapped[Any] = mapped_column(JsonType, nullable=True)
@@ -636,6 +638,22 @@ class HouseMetricSnapshot(Base):
     scope: Mapped[str] = mapped_column(String(32), primary_key=True)
     metrics: Mapped[Any] = mapped_column(JsonType, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class PricePin(Base):
+    # §12 amendment (SPEC-MARKETDATA §2.1): the pinned-price ledger — one authoritative,
+    # timestamped close per (exchange, ticker, trading_date) so reports, monitors, and
+    # scoring read a single price. Schema only here; SPEC-MARKETDATA owns the writes.
+    __tablename__ = "price_pins"
+    exchange: Mapped[str] = mapped_column(String(16), primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(16), primary_key=True)
+    trading_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    value: Mapped[Any] = mapped_column(Price, nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    pinned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 

@@ -26,7 +26,6 @@ RUN_LEGAL = [
     (RunStatus.RUNNING, RunAction.OPEN_GATE, RunStatus.WAITING_PM),
     (RunStatus.RUNNING, RunAction.SUCCEED, RunStatus.SUCCEEDED),
     (RunStatus.RUNNING, RunAction.CANCEL, RunStatus.CANCELLED),
-    (RunStatus.WAITING_PM, RunAction.RESUME, RunStatus.RUNNING),
     (RunStatus.WAITING_PM, RunAction.SUCCEED, RunStatus.SUCCEEDED),
     (RunStatus.WAITING_PM, RunAction.CANCEL, RunStatus.CANCELLED),
     (RunStatus.QUEUED, RunAction.CANCEL, RunStatus.CANCELLED),

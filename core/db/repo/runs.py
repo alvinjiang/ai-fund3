@@ -13,6 +13,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from core.db import models
@@ -20,6 +22,13 @@ from core.db.schemas import StageIn
 from core.db.types import utc_now
 from core.domain.enums import RunStatus, RunType
 from core.domain.run_sm import RunAction, RunTransitionContext, run_transition
+
+
+def _conflict_insert(session: Session, model: type) -> Any:
+    """Dialect-aware INSERT that supports ON CONFLICT DO NOTHING (PG + SQLite)."""
+    name = session.get_bind().dialect.name
+    return pg_insert(model) if name == "postgresql" else sqlite_insert(model)
+
 
 _NON_MUTATING = {RunType.MONITOR_TICK.value, RunType.PM_QUERY.value}
 _FINISH_ACTION = {
@@ -89,19 +98,23 @@ def add_stages(session: Session, run_id: UUID, stages: list[StageIn]) -> list[mo
 def start_run(session: Session, run_id: UUID) -> bool:
     """Move a run queued -> running, acquiring the per-ticker lock for mutating runs.
 
-    Returns False (run stays ``queued``) when a different mutating run holds the lock.
+    Returns False (run stays ``queued``) when a different mutating run holds the lock. The
+    lock is taken with ``INSERT ... ON CONFLICT DO NOTHING`` (SPEC §4.10) so two workers
+    racing on the same coverage never raise ``IntegrityError`` — the loser simply observes
+    it does not own the row.
     """
     r = session.get(models.Run, run_id)
     if r.mutates_dossier and r.coverage_id is not None:
-        existing = session.get(models.CoverageRunLock, r.coverage_id)
-        if existing is not None and existing.run_id != run_id:
-            return False
-        if existing is None:
-            session.add(
-                models.CoverageRunLock(
-                    coverage_id=r.coverage_id, run_id=run_id, acquired_at=utc_now()
-                )
-            )
+        stmt = (
+            _conflict_insert(session, models.CoverageRunLock)
+            .values(coverage_id=r.coverage_id, run_id=run_id, acquired_at=utc_now())
+            .on_conflict_do_nothing(index_elements=["coverage_id"])
+        )
+        session.execute(stmt)
+        owner = session.get(models.CoverageRunLock, r.coverage_id)
+        if owner is None or owner.run_id != run_id:
+            session.flush()
+            return False  # another mutating run owns this ticker's lock
     r.status = RunStatus.RUNNING.value
     if r.started_at is None:
         r.started_at = utc_now()

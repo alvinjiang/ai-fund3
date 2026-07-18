@@ -14,6 +14,9 @@ from core.db.repo import coverage as cov_repo
 from core.db.repo import runs as runs_repo
 from core.db.schemas import StageIn
 from core.db.types import utc_now
+from core.domain.backoff import BackoffPolicy
+
+NO_DELAY = BackoffPolicy(base_s=0, max_s=0, jitter=0.0)
 
 
 def _seed_run(session, n_stages=5):
@@ -130,7 +133,7 @@ def test_reaper_requeues_expired_lease(factory):
     row = s2.get(models.RunStage, stage.id)
     row.lease_expires_at = utc_now().replace(microsecond=0)
     s2.commit()
-    reaped = queue.reap_expired(s2, utc_now())
+    reaped = queue.reap_expired(s2, utc_now(), backoff=NO_DELAY)
     s2.commit()
     assert stage.id in reaped
     assert s2.get(models.RunStage, stage.id).status == "queued"

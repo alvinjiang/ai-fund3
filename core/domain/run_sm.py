@@ -38,7 +38,6 @@ class RunAction(StrEnum):
     OPEN_GATE = "open_gate"  # running -> waiting_pm
     SUCCEED = "succeed"
     CANCEL = "cancel"
-    RESUME = "resume"  # waiting_pm -> running (gate answered; more work)
 
 
 @dataclass(frozen=True)
@@ -69,7 +68,6 @@ def run_transition(state: RunStatus, action: RunAction, ctx: RunTransitionContex
         (RunStatus.RUNNING, RunAction.OPEN_GATE): (RunStatus.WAITING_PM, "reached_pm_gate"),
         (RunStatus.RUNNING, RunAction.SUCCEED): (RunStatus.SUCCEEDED, "succeeded"),
         (RunStatus.RUNNING, RunAction.CANCEL): (RunStatus.CANCELLED, "cancelled"),
-        (RunStatus.WAITING_PM, RunAction.RESUME): (RunStatus.RUNNING, "gate_answered"),
         (RunStatus.WAITING_PM, RunAction.SUCCEED): (RunStatus.SUCCEEDED, "succeeded"),
         (RunStatus.WAITING_PM, RunAction.CANCEL): (RunStatus.CANCELLED, "cancelled"),
         (RunStatus.QUEUED, RunAction.CANCEL): (RunStatus.CANCELLED, "cancelled"),

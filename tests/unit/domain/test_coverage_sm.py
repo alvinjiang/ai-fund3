@@ -16,53 +16,182 @@ from core.domain.coverage_sm import (
 )
 from core.domain.enums import CoverageState
 
-# (from_state | None, action, expected_to_state, expected_cause) — the §5 legal table.
+# (from_state | None, action, expected_to_state, expected_cause, expected_side_effects)
+# — the §5 legal table. ``expected_side_effects`` is asserted by set equality so a
+# dropped or typo'd side effect (e.g. ``outbox:gate.opened`` -> ``outbox:gate_opened``)
+# fails the suite.
 LEGAL = [
-    (None, Action.PROPOSE, CoverageState.PROPOSED, "propose"),
-    (CoverageState.PROPOSED, Action.START_INITIATION, CoverageState.INITIATING, "start_initiation"),
+    (
+        None,
+        Action.PROPOSE,
+        CoverageState.PROPOSED,
+        "propose",
+        frozenset({"create_coverage_row", "compute_dossier_slug"}),
+    ),
+    (
+        CoverageState.PROPOSED,
+        Action.START_INITIATION,
+        CoverageState.INITIATING,
+        "start_initiation",
+        frozenset({"set_lead_house"}),
+    ),
     (
         CoverageState.INITIATING,
         Action.INITIATION_DELIVERED,
         CoverageState.DECISION_PENDING,
         "initiation_delivered",
+        frozenset({"open_gate:initiation_decision", "outbox:gate.opened"}),
     ),
-    (CoverageState.INITIATING, Action.INITIATION_FAILED, CoverageState.FAILED, "initiation_failed"),
+    (
+        CoverageState.INITIATING,
+        Action.INITIATION_FAILED,
+        CoverageState.FAILED,
+        "initiation_failed",
+        frozenset({"outbox:run.finished"}),
+    ),
     (
         CoverageState.DECISION_PENDING,
         Action.INITIATION_CANCELLED,
         CoverageState.FAILED,
         "initiation_cancelled",
+        frozenset({"cancel_open_gate", "retain_branch", "outbox:run.finished"}),
     ),
-    (CoverageState.FAILED, Action.RETRY_INITIATION, CoverageState.INITIATING, "retry_initiation"),
-    (CoverageState.PROPOSED, Action.WITHDRAW, CoverageState.REJECTED, "withdraw"),
-    (CoverageState.FAILED, Action.WITHDRAW, CoverageState.REJECTED, "withdraw"),
-    (CoverageState.DECISION_PENDING, Action.DECIDE_ACTIVE, CoverageState.ACTIVE, "pm_decision"),
-    (CoverageState.DECISION_PENDING, Action.DECIDE_WATCH, CoverageState.WATCH, "pm_decision"),
-    (CoverageState.DECISION_PENDING, Action.DECIDE_REJECT, CoverageState.REJECTED, "pm_decision"),
-    (CoverageState.WATCH, Action.PROMOTE, CoverageState.ACTIVE, "promote"),
-    (CoverageState.ACTIVE, Action.DEMOTE, CoverageState.WATCH, "demote"),
-    (CoverageState.ACTIVE, Action.EXIT, CoverageState.EXITED, "exit"),
-    (CoverageState.WATCH, Action.EXIT, CoverageState.EXITED, "exit"),
-    (CoverageState.EXITED, Action.RE_PROPOSE, CoverageState.PROPOSED, "re_propose"),
-    (CoverageState.REJECTED, Action.RE_PROPOSE, CoverageState.PROPOSED, "re_propose"),
-    (CoverageState.ACTIVE, Action.SET_LEAD, CoverageState.ACTIVE, "lead_change"),
-    (CoverageState.WATCH, Action.SET_LEAD, CoverageState.WATCH, "lead_change"),
+    (
+        CoverageState.FAILED,
+        Action.RETRY_INITIATION,
+        CoverageState.INITIATING,
+        "retry_initiation",
+        frozenset({"new_initiation_run"}),
+    ),
+    (
+        CoverageState.PROPOSED,
+        Action.WITHDRAW,
+        CoverageState.REJECTED,
+        "withdraw",
+        frozenset({"no_branch_merge"}),
+    ),
+    (
+        CoverageState.FAILED,
+        Action.WITHDRAW,
+        CoverageState.REJECTED,
+        "withdraw",
+        frozenset({"no_branch_merge"}),
+    ),
+    (
+        CoverageState.DECISION_PENDING,
+        Action.DECIDE_ACTIVE,
+        CoverageState.ACTIVE,
+        "pm_decision",
+        frozenset(
+            {
+                "answer_gate",
+                "merge_branch",
+                "predictions_open",
+                "write_coverage_levels",
+                "set_decided_at",
+                "outbox:coverage.state_changed",
+            }
+        ),
+    ),
+    (
+        CoverageState.DECISION_PENDING,
+        Action.DECIDE_WATCH,
+        CoverageState.WATCH,
+        "pm_decision",
+        frozenset(
+            {
+                "answer_gate",
+                "merge_branch",
+                "predictions_open",
+                "write_coverage_levels",
+                "set_decided_at",
+                "outbox:coverage.state_changed",
+            }
+        ),
+    ),
+    (
+        CoverageState.DECISION_PENDING,
+        Action.DECIDE_REJECT,
+        CoverageState.REJECTED,
+        "pm_decision",
+        frozenset({"answer_gate", "no_branch_merge", "supersede_predictions"}),
+    ),
+    (
+        CoverageState.WATCH,
+        Action.PROMOTE,
+        CoverageState.ACTIVE,
+        "promote",
+        frozenset({"spawn_deep_review", "outbox:coverage.state_changed"}),
+    ),
+    (
+        CoverageState.ACTIVE,
+        Action.DEMOTE,
+        CoverageState.WATCH,
+        "demote",
+        frozenset({"outbox:coverage.state_changed"}),
+    ),
+    (
+        CoverageState.ACTIVE,
+        Action.EXIT,
+        CoverageState.EXITED,
+        "exit",
+        frozenset({"expire_open_predictions", "set_exited_at", "outbox:coverage.state_changed"}),
+    ),
+    (
+        CoverageState.WATCH,
+        Action.EXIT,
+        CoverageState.EXITED,
+        "exit",
+        frozenset({"expire_open_predictions", "set_exited_at", "outbox:coverage.state_changed"}),
+    ),
+    (
+        CoverageState.EXITED,
+        Action.RE_PROPOSE,
+        CoverageState.PROPOSED,
+        "re_propose",
+        frozenset({"reuse_dossier_history"}),
+    ),
+    (
+        CoverageState.REJECTED,
+        Action.RE_PROPOSE,
+        CoverageState.PROPOSED,
+        "re_propose",
+        frozenset({"reuse_dossier_history"}),
+    ),
+    (
+        CoverageState.ACTIVE,
+        Action.SET_LEAD,
+        CoverageState.ACTIVE,
+        "lead_change",
+        frozenset(
+            {"write_lead_history", "open_predictions_keep_house", "outbox:coverage.state_changed"}
+        ),
+    ),
+    (
+        CoverageState.WATCH,
+        Action.SET_LEAD,
+        CoverageState.WATCH,
+        "lead_change",
+        frozenset(
+            {"write_lead_history", "open_predictions_keep_house", "outbox:coverage.state_changed"}
+        ),
+    ),
 ]
 
 # A context that satisfies every guard (note provided, gate open, no open position, …).
 HAPPY = TransitionContext(note_provided=True)
 
 
-@pytest.mark.parametrize("from_state, action, to_state, cause", LEGAL)
-def test_legal_transition(from_state, action, to_state, cause):
+@pytest.mark.parametrize("from_state, action, to_state, cause, side_effects", LEGAL)
+def test_legal_transition(from_state, action, to_state, cause, side_effects):
     t = transition(from_state, action, HAPPY)
     assert isinstance(t, Transition)
     assert t.to_state == to_state
     assert t.cause == cause
-    assert isinstance(t.side_effects, list) and t.side_effects
+    assert set(t.side_effects) == side_effects  # exact — catches dropped/typo'd effects
 
 
-LEGAL_PAIRS = {(f, a) for (f, a, _, _) in LEGAL if f is not None}
+LEGAL_PAIRS = {(f, a) for (f, a, *_) in LEGAL if f is not None}
 
 
 @pytest.mark.parametrize("state", list(CoverageState))
@@ -119,6 +248,16 @@ def test_set_lead_to_non_assignable_house_raises():
             CoverageState.ACTIVE,
             Action.SET_LEAD,
             TransitionContext(new_house_assignable=False),
+        )
+
+
+def test_set_lead_to_disabled_house_raises():
+    # §5 row 14: the new lead must be enabled AND assignable AND not meta.
+    with pytest.raises(IllegalTransition):
+        transition(
+            CoverageState.ACTIVE,
+            Action.SET_LEAD,
+            TransitionContext(new_house_enabled=False),
         )
 
 

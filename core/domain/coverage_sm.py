@@ -57,6 +57,7 @@ class TransitionContext:
     has_open_position: bool = False
     force: bool = False
     note_provided: bool = False
+    new_house_enabled: bool = True
     new_house_assignable: bool = True
     new_house_meta: bool = False
     gate_open: bool = True
@@ -202,8 +203,11 @@ def _check_guards(from_state: Any, action: Action, ctx: TransitionContext) -> No
         if not ctx.note_provided:
             raise IllegalTransition(from_state, action, "withdraw requires a mandatory note")
     elif action == Action.SET_LEAD:
-        # Row 14 guard. (set_lead during initiating/decision_pending is already an illegal
-        # pair — it is not in _ENTRIES — so it raises before guards run.)
+        # Row 14 guard: new house must be enabled AND assignable AND not meta. (set_lead
+        # during initiating/decision_pending is already an illegal pair — not in _ENTRIES
+        # — so it raises before guards run.)
+        if not ctx.new_house_enabled:
+            raise IllegalTransition(from_state, action, "lead house must be enabled")
         if ctx.new_house_meta:
             raise IllegalTransition(from_state, action, "a meta house cannot be lead")
         if not ctx.new_house_assignable:

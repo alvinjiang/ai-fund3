@@ -16,6 +16,9 @@ from core.db.repo import coverage as cov_repo
 from core.db.repo import runs as runs_repo
 from core.db.schemas import AttemptIn, StageIn
 from core.db.types import utc_now
+from core.domain.backoff import BackoffPolicy
+
+NO_DELAY = BackoffPolicy(base_s=0, max_s=0, jitter=0.0)
 
 
 def _setup(session):
@@ -71,12 +74,20 @@ def test_cost_rollup_counts_failed_attempts(session):
     stage = queue.claim_stage(session, "w1", lease_seconds=300)
     assert stage is not None
     queue.fail_stage(
-        session, stage.id, AttemptIn(worker_id="w1", cost_usd=Decimal("1.00")), retryable=True
+        session,
+        stage.id,
+        AttemptIn(worker_id="w1", cost_usd=Decimal("1.00")),
+        retryable=True,
+        backoff=NO_DELAY,
     )
 
     stage = queue.claim_stage(session, "w1", lease_seconds=300)
     queue.fail_stage(
-        session, stage.id, AttemptIn(worker_id="w1", cost_usd=Decimal("2.00")), retryable=True
+        session,
+        stage.id,
+        AttemptIn(worker_id="w1", cost_usd=Decimal("2.00")),
+        retryable=True,
+        backoff=NO_DELAY,
     )
 
     stage = queue.claim_stage(session, "w1", lease_seconds=300)
@@ -99,13 +110,38 @@ def test_fail_stage_terminal_when_attempts_exhausted(session):
     _c, r = _setup(session)
     # max_attempts defaults to 3
     stage = queue.claim_stage(session, "w1", lease_seconds=300)  # attempt 1
-    queue.fail_stage(session, stage.id, AttemptIn(worker_id="w1"), retryable=True)
+    queue.fail_stage(session, stage.id, AttemptIn(worker_id="w1"), retryable=True, backoff=NO_DELAY)
     stage = queue.claim_stage(session, "w1", lease_seconds=300)  # attempt 2
-    queue.fail_stage(session, stage.id, AttemptIn(worker_id="w1"), retryable=True)
+    queue.fail_stage(session, stage.id, AttemptIn(worker_id="w1"), retryable=True, backoff=NO_DELAY)
     stage = queue.claim_stage(session, "w1", lease_seconds=300)  # attempt 3
-    queue.fail_stage(session, stage.id, AttemptIn(worker_id="w1"), retryable=False)
+    queue.fail_stage(
+        session, stage.id, AttemptIn(worker_id="w1"), retryable=False, backoff=NO_DELAY
+    )
     session.refresh(stage)
     assert stage.status == "failed"
+
+
+def test_fail_stage_applies_exponential_backoff(session):
+    """§6.2: a retryable failure pushes available_at out, and the delay grows."""
+    _c, _r = _setup(session)
+    policy = BackoffPolicy(base_s=30, max_s=3600, jitter=0.0)
+
+    stage = queue.claim_stage(session, "w1", lease_seconds=300)
+    before = utc_now().replace(tzinfo=None)  # SQLite reads datetimes back naive
+    queue.fail_stage(session, stage.id, AttemptIn(worker_id="w1"), retryable=True, backoff=policy)
+    session.refresh(stage)
+    assert stage.available_at > before + timedelta(seconds=25)  # base 30s, not "now"
+
+    # the stage is not claimable while its backoff is unexpired
+    assert queue.claim_stage(session, "w2", lease_seconds=300) is None
+
+    stage.available_at = utc_now()
+    session.flush()
+    stage = queue.claim_stage(session, "w2", lease_seconds=300)
+    mid = utc_now().replace(tzinfo=None)
+    queue.fail_stage(session, stage.id, AttemptIn(worker_id="w2"), retryable=True, backoff=policy)
+    session.refresh(stage)
+    assert stage.available_at > mid + timedelta(seconds=55)  # attempt 2 -> ~60s, doubled
 
 
 def test_heartbeat_extends_lease_and_rejects_non_owner(session):
@@ -126,7 +162,7 @@ def test_reap_expired_requeues_under_max_and_fails_at_max(session):
     # force lease into the past
     stage.lease_expires_at = utc_now() - timedelta(seconds=1)
     session.flush()
-    reaped = queue.reap_expired(session, utc_now())
+    reaped = queue.reap_expired(session, utc_now(), backoff=NO_DELAY)
     assert stage.id in reaped
     session.refresh(stage)
     assert stage.status == "queued"  # attempts(1) < max(3) -> requeued
@@ -135,6 +171,6 @@ def test_reap_expired_requeues_under_max_and_fails_at_max(session):
         s = queue.claim_stage(session, "w1", lease_seconds=300)
         s.lease_expires_at = utc_now() - timedelta(seconds=1)
         session.flush()
-        queue.reap_expired(session, utc_now())
+        queue.reap_expired(session, utc_now(), backoff=NO_DELAY)
     session.refresh(stage)
     assert stage.status == "failed"  # attempts exhausted via lease expiry

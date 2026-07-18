@@ -14,6 +14,12 @@ from typing import Any
 
 from core.db import queue
 from core.db.schemas import AttemptIn
+from core.domain.backoff import BackoffPolicy
+
+# The fake drives stages back-to-back; real backoff would make a retried stage
+# unclaimable for the rest of the loop. Orchestrator tests that care about the
+# delay itself should call queue.fail_stage directly with a real policy.
+NO_DELAY = BackoffPolicy(base_s=0, max_s=0, jitter=0.0)
 
 
 def _default_result(role: str) -> dict[str, Any]:
@@ -73,7 +79,7 @@ class FakeRunner:
                 and self._fail_counts.get(stage.role, 0) < self.fail_times
             ):
                 self._fail_counts[stage.role] = self._fail_counts.get(stage.role, 0) + 1
-                queue.fail_stage(session, stage.id, attempt, retryable=True)
+                queue.fail_stage(session, stage.id, attempt, retryable=True, backoff=NO_DELAY)
             else:
                 result = self.results.get(stage.role) or _default_result(stage.role)
                 queue.complete_stage(session, stage.id, attempt, result)
