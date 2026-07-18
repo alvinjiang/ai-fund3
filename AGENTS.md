@@ -76,15 +76,37 @@
    not just exists. Rule: *if you can't write a test that fails when the mechanism is
    removed, you haven't implemented it.* Template: the alembic drift-detection test, the
    advisory-lock non-leader no-op test, the model-guard fixture test.
-2. **Spec-coverage tests.** When a spec section lists features (§4 jobs, §5 routes, §6 CLI
-   commands), add a test that asserts every item exists AND has at least one exercising
-   test. This catches "missing" not just "unmapped." Template: `test_spec_coverage.py`.
+2. **Spec-coverage tests assert behavior, never existence.** When a spec section lists
+   features (§4 jobs, §5 routes, §6 CLI commands), add a test that asserts every item
+   exists AND that each one *does its job*. **The test:** if it would still pass with the
+   function body replaced by `pass` or `raise NotImplementedError`, it is not a test.
+   These are **not** coverage and must not be written:
+   `assert callable(f)` · `assert set(REGISTRY) == {...}` · asserting a lookup table
+   against its own literal · asserting a side-effect *name* in a state-machine table
+   rather than the effect on the database · `inspect.signature(...).default is None`
+   without exercising the default.
+   Template: `tests/unit/test_no_hardcoded_models.py` (a real fires-test), **not**
+   `test_spec_coverage.py`, which degraded into exactly the box-ticking this rule forbids.
 3. **No "wiring omitted" in production docstrings.** Say what the code does, not what tests
    don't. "APScheduler wiring is omitted in unit tests" was a lie when there was no wiring
    anywhere. If something isn't wired, say `NotImplementedError("pending …")` in the code.
 4. **NOTES must never say "complete" for partial work.** Use "implemented: X; deferred: Y;
    missing: Z" with explicit lists. The word "complete" without proving every named
    mechanism fires is the overclaim that let gaps survive two review rounds.
+5. **No dead mechanisms — every public symbol needs a non-test caller.** A module that is
+   created, tested, and never called is not an implementation; it is a decoration that
+   makes a gap look filled. Before marking any item done, ask the two definition-of-done
+   questions: **(a) at least one production caller? (b) at least one test that fails when
+   the mechanism is removed?** If either is "no," it is not done — say so in NOTES and
+   BUGS. `tests/unit/test_no_dead_mechanisms.py` enforces (a) mechanically for
+   `core/orchestrator/`, `core/scheduler/` and `cli/format.py`; when you add a symbol
+   there, wire it or add it to the allowlist **with a reason**.
+6. **Declared-but-unimplemented is worse than absent.** If a state machine, registry, or
+   config schema names an effect the code does not perform, either implement it or remove
+   the name — never leave it declared with a no-op executor and a comment saying another
+   layer handles it. Verify the other layer actually does. (`merge_branch`,
+   `predictions_open`, `supersede_predictions` and four siblings sat declared, no-op'd,
+   and "tested" for three review rounds behind exactly such a comment.)
 
 **Agent instructions:**
 - `AGENTS.md` (this file) is the single agent-instruction file. Do not also create
