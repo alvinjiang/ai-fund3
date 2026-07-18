@@ -472,3 +472,154 @@ unit tests.
    AGENTS.md definition-of-done they do not count as coverage. This is the spec-coverage
    pattern degrading into the very box-ticking it was introduced to prevent.
 9. **Doc drift** — `scheduler.py:7` and NOTES assert systemd wiring that does not exist.
+
+---
+
+## §5 Core API
+
+**BUGS #1/#5 claims hold up.** The router exposes exactly 26 `(method, path)` pairs,
+`ROUTE_COMMAND_MAP` has 26, and the set difference is empty both ways. The three deferred
+routes are genuinely absent and carry reasons (`test_spec_route_parity.py:37,42,44`).
+Importantly, the **read models are real, not stubs** — every read route issues a genuine
+`select()` against a real table (`routes.py:155,466,565,634,654,682,749`); none returns a
+hardcoded `[]`. That part of the recent work is sound.
+
+The problems are in §5.2 cross-cutting, and one is severe.
+
+### §5.2 — the severe one
+
+- **Bearer token on read routes** — **MISSING (verified empirically).** The spec requires
+  read routes to require the bearer token. No read route has any auth dependency, and
+  `create_app` includes the router with no global dependency (`app.py:62`). Driving the
+  in-process app with **no `Authorization` header at all**:
+
+  ```
+  /coverage    -> 200      /predictions -> 200      /costs  -> 200
+  /runs        -> 200      /events      -> 200      /health -> 200
+  /gates       -> 200
+  ```
+
+  **The entire read surface — coverage, runs, gates, predictions, events, costs, config
+  check — is open to anything that can reach the socket.** `require_pm` (`deps.py:41`) is
+  the only thing that checks the token, and it is on mutations only. The existing tests
+  assert the 403-on-mutation path (`test_api.py:26`) but nothing asserts a read route
+  rejects a missing or bad token, so the absence is invisible to CI.
+
+### §5.1 Routes
+
+- **`GET /gates?state=`** — DEVIATES; **live functional bug (verified).** The param is
+  declared `state_: str = Query(default="open")` with **no `alias="state"`**
+  (`routes.py:508`), so the public query param is literally `state_`. Confirmed by
+  reflection: `list_gates` alias is `state_` while `list_runs` correctly uses
+  `alias="status"` (`routes.py:464`). `cli/client.py:115` sends `?state=…`, which is
+  silently dropped — **`fund gates-list` can only ever see open gates.**
+- **`POST /coverage/{slug}/promote` "also spawns `deep_review`"** — MISSING. The route
+  only transitions (`routes.py:270`); the `spawn_deep_review` side effect emitted by the
+  state machine (`coverage_sm.py:151`) is an explicit no-op in the repo
+  (`repo/coverage.py:209`) and no caller handles it. **Promotion silently drops a specced
+  run**, with no deferral record.
+- **Query-param completeness** — PARTIAL. Missing: `GET /coverage ?exchange=`,
+  `GET /runs ?type=&coverage=&limit=`, `GET /events ?since=`, `GET /costs ?since=` and
+  `by=day` (which 400s at `routes.py:748`). Worse, `GET /predictions ?coverage=` takes a
+  **UUID** (`routes.py:649`) while every other coverage-addressed route and the CLI use
+  the dossier slug — so `fund predictions-list --coverage tse_2267` will 422 against its
+  own API.
+- **`GET /health` shape** — PARTIAL. Spec wants db, queue depth, leader, last scheduler
+  success; returns `{status, queue_pending: bool}` (`routes.py:549-554`) — no depth, no
+  leader, no scheduler timestamp, and no DB probe distinct from the query itself.
+- **`GET /coverage/{slug}/dossier` shape** — PARTIAL. Spec wants index row + file list +
+  stance/TP + staleness; returns index fields only (`routes.py:637-644`).
+- **`POST /events/{id}/rate`** — DEVIATES. Spec's vocabulary is `{rating: up|down}`; the
+  API takes `rating: int` (`routes.py:701`) and the CLI `choices=["1","-1"]`
+  (`cli/main.py:152`). The adapter will have to translate 👍/👎 twice.
+
+### §5.2 — the rest
+
+- **PM allowlist on mutating routes** — IMPLEMENTED. `require_pm` is on all 12 mutating
+  routes; no mutating route omits it. Allowlist comes from config, not code
+  (`app.py:33`, `deps.py:50`).
+- **`Idempotency-Key`** — IMPLEMENTED, and properly. On every mutating route; missing key
+  → 400 (`deps.py:91`), replay returns the stored body verbatim (`:100`), same-key
+  different-body → 409 (`:96`). Tests are removal-sensitive
+  (`test_api.py:35,49,71`). This meets the AGENTS.md bar.
+- **`audit_log` on every mutation** — IMPLEMENTED. `write_audit(...)` with
+  `request.state.request_id` in all 15 mutating handlers, and replay short-circuits
+  *before* the audit write so there is no double row (asserted at `test_api.py:63-67`).
+- **Error envelope** — IMPLEMENTED. `{"error": {code, message, request_id}}`
+  (`errors.py:26`), wired to both an `ApiError` handler and a catch-all 500
+  (`app.py:50-58`).
+- **Request id in every response** — PARTIAL. Present as the `X-Request-Id` header
+  (`app.py:47`) and in error bodies, but absent from every success body. And the
+  unhandled-500 handler passes `""` instead of `request.state.request_id`
+  (`app.py:58`) — the one case where a caller most needs the correlation id is the one
+  case that lacks it.
+- **Pagination** — MISSING. Ad-hoc hardcoded caps (predictions `.limit(200)`, events
+  `.limit(100)`); `/coverage`, `/runs`, `/costs` are unbounded with no cursor or offset.
+
+---
+
+## §6 `fund` CLI
+
+- **Command coverage vs the spec list** — PARTIAL. Five specced commands are absent.
+  Three (`fund track-record`, `fund query keep`, `fund run artifacts`) follow their
+  deferred routes and are legitimately tracked. But **`fund bootstrap` and
+  `fund config reload` have no deferral record anywhere** (`grep -rn bootstrap
+  --include=*.py` → zero hits repo-wide) and no backing route — so they are invisible to
+  every guard, because the parity test is route-anchored and these two have no route.
+- **Commands call the API, not stubs** — IMPLEMENTED. All 26 dispatch branches
+  (`cli/main.py:167-246`) call a real `CoreClient` method; `_call` is a genuine httpx
+  request with `Authorization`, `X-PM-User` and a minted `Idempotency-Key`
+  (`cli/client.py:40-53`).
+- **"Human table by default, `--json` for scripting"** — DEVIATES **(verified)**. `_emit`
+  (`cli/main.py:60-69`) prints `json.dumps` in **both** branches: for a dict the two paths
+  are byte-identical, and the default merely prints one JSON object per line for lists.
+  **`--json` is a no-op.** `cli/format.py:11 table()` has **zero production callers**; its
+  only importer is `test_section8_modules.py:7`, which asserts the module exists. Dead
+  code guarded by a test of its existence rather than its use — the §8 pattern again.
+- **Exit code 2 for gate/validation refusal** — DEVIATES, inverted. `run()` returns 1 for
+  every `CoreError` including 409/422 (`cli/main.py:249`); 2 is returned only when an
+  unrecognized command falls off the end (`:265`) — the opposite of the spec's meaning.
+- **No direct DB access** — IMPLEMENTED, with one documented carve-out: `fund checkconfig`
+  imports `core.config.*` directly (`cli/main.py:251-264`) as a local preflight. Not a DB
+  read; reasonable.
+- **Command naming** — DEVIATES (cosmetic). Spec uses subcommand groups
+  (`fund coverage list`, `fund run show`); the implementation uses flat hyphenated names
+  (`coverage-list`, `run-show`). Worth a spec amendment either way so the two agree.
+
+### The parity test itself
+
+- **Does it test what it claims?** — PARTIAL, and worth being precise about. It genuinely
+  enforces four directions and would fail on an added, removed, or silently-implemented
+  route (`test_spec_route_parity.py:71-98`). Real value; BUGS #5 was not overclaimed.
+- **Can it catch a stub?** — **No, by construction.** It reflects only `(method, r.path)`
+  off the router (`:58-68`), so a handler body of `return []` passes every assertion.
+  Likewise `test_every_mapped_command_is_a_registered_subcommand` (`:101`) checks that the
+  **argparse subparser exists**, not that `run()` has a dispatch branch — a command
+  registered in `build_parser` but missing from `run()` would fall through to `return 2`
+  and the test would still pass. **No test invokes `main()` or `run()` for any command.**
+
+### §5 / §6 gaps ranked by severity
+
+1. **Read routes are entirely unauthenticated** (`app.py:62`) — verified: all seven read
+   paths 200 with no token. Fix: `include_router(..., dependencies=[Depends(require_token)])`
+   plus a test that a read route 401s without a token.
+2. **`GET /gates?state=` is silently ignored** (`routes.py:508`, missing `alias="state"`)
+   — gate filtering is inert and `fund gates-list` can never show non-open gates.
+3. **`promote` never spawns `deep_review`** (`routes.py:270`, no-op at
+   `repo/coverage.py:209`) — a specced durable side effect dropped with no deferral record.
+4. **The parity test cannot detect a stub or an undispatched command.** Add (a) a smoke
+   test driving `cli.main.run()` for each of the 26 commands against the in-process app,
+   asserting no `return 2` and no exception, and (b) per-route assertions that read models
+   return seeded rows rather than `[]`.
+5. **`fund bootstrap` and `fund config reload` missing with no deferral record** — the two
+   specced §6 commands invisible to every guard.
+6. **`cli/format.py` is dead and `--json` is a no-op** — either wire `table()` into
+   `_emit`'s non-JSON branch with per-command column sets, or drop the module and the
+   spec's "human table by default" claim.
+7. **`GET /predictions?coverage=` takes a UUID, not a slug** — guaranteed 422 from the
+   CLI's own flag.
+8. **CLI exit codes inverted** — map 409/422 → 2, transport/5xx → 1.
+9. **`request_id` missing from success bodies; the 500 handler emits `""`.**
+10. **Query-param and shape gaps** — `/coverage?exchange`, `/runs?type&coverage&limit`,
+    `/events?since`, `/costs?since&by=day`, dossier file list + staleness, health
+    leader/queue-depth/scheduler timestamp.
