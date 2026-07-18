@@ -122,3 +122,31 @@ class CoreClient:
     # --- health ---
     def health(self) -> dict:
         return self._call("GET", "/health")
+
+    # --- read models (BUGS #1) ---
+    def run_show(self, run_id: str) -> dict:
+        return self._call("GET", f"/runs/{run_id}")
+
+    def run_retry(self, run_id: str) -> dict:
+        return self._call("POST", f"/runs/{run_id}/retry", json={})
+
+    def dossier_show(self, slug: str) -> dict:
+        return self._call("GET", f"/coverage/{slug}/dossier")
+
+    def predictions_list(self, **kw) -> list:
+        return self._call("GET", "/predictions", params={k: v for k, v in kw.items() if v})
+
+    def events_list(self, **kw) -> list:
+        return self._call("GET", "/events", params={k: v for k, v in kw.items() if v})
+
+    def events_rate(self, event_id: str, rating: int) -> dict:
+        return self._call("POST", f"/events/{event_id}/rate", json={"rating": rating})
+
+    def cost(self, by: str = "house") -> list:
+        return self._call("GET", "/costs", params={"by": by})
+
+    def query(self, coverage: str, question: str) -> dict:
+        return self._call("POST", "/queries", json={"coverage": coverage, "question": question})
+
+    def config_check(self) -> dict:
+        return self._call("GET", "/config/check")

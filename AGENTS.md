@@ -71,6 +71,21 @@
   never enter git). `.env.example` documents placeholders only. `config/*.yaml.example`
   are resettable non-secret templates.
 
+**Safety-mechanism discipline (binding — learned the hard way):**
+1. **Every safety mechanism needs a fires-test.** A test that proves it *changes behavior*,
+   not just exists. Rule: *if you can't write a test that fails when the mechanism is
+   removed, you haven't implemented it.* Template: the alembic drift-detection test, the
+   advisory-lock non-leader no-op test, the model-guard fixture test.
+2. **Spec-coverage tests.** When a spec section lists features (§4 jobs, §5 routes, §6 CLI
+   commands), add a test that asserts every item exists AND has at least one exercising
+   test. This catches "missing" not just "unmapped." Template: `test_spec_coverage.py`.
+3. **No "wiring omitted" in production docstrings.** Say what the code does, not what tests
+   don't. "APScheduler wiring is omitted in unit tests" was a lie when there was no wiring
+   anywhere. If something isn't wired, say `NotImplementedError("pending …")` in the code.
+4. **NOTES must never say "complete" for partial work.** Use "implemented: X; deferred: Y;
+   missing: Z" with explicit lists. The word "complete" without proving every named
+   mechanism fires is the overclaim that let gaps survive two review rounds.
+
 **Agent instructions:**
 - `AGENTS.md` (this file) is the single agent-instruction file. Do not also create
   `CLAUDE.md`, `CODEX.md`, `.cursorrules`, or `.aider.conf.yml`.

@@ -22,6 +22,7 @@ ROUTE_COMMAND_MAP: dict[tuple[str, str], str] = {
     ("POST", "/coverage"): "propose",
     ("GET", "/coverage"): "coverage-list",
     ("GET", "/coverage/{slug}"): "coverage-show",
+    ("GET", "/coverage/{slug}/dossier"): "dossier-show",
     ("POST", "/coverage/{slug}/initiate"): "initiate",
     ("POST", "/coverage/{slug}/decide"): "decide",
     ("POST", "/coverage/{slug}/promote"): "promote",
@@ -32,9 +33,17 @@ ROUTE_COMMAND_MAP: dict[tuple[str, str], str] = {
     ("POST", "/coverage/{slug}/levels"): "levels-set",
     ("POST", "/runs"): "run-new",
     ("GET", "/runs"): "runs-list",
+    ("GET", "/runs/{run_id}"): "run-show",
     ("POST", "/runs/{run_id}/cancel"): "run-cancel",
+    ("POST", "/runs/{run_id}/retry"): "run-retry",
     ("GET", "/gates"): "gates-list",
     ("POST", "/gates/{gate_id}/answer"): "gates-answer",
+    ("POST", "/queries"): "query",
+    ("GET", "/predictions"): "predictions-list",
+    ("GET", "/events"): "events-list",
+    ("POST", "/events/{event_id}/rate"): "events-rate",
+    ("GET", "/costs"): "cost",
+    ("GET", "/config/check"): "config-check",
     ("GET", "/health"): "health",
 }
 
@@ -117,6 +126,27 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("answer")
     sp.add_argument("--notes")
 
+    # read models (BUGS #1)
+    sub.add_parser("run-show").add_argument("run_id")
+    sub.add_parser("run-retry").add_argument("run_id")
+    sub.add_parser("dossier-show").add_argument("slug")
+    sp = sub.add_parser("predictions-list")
+    sp.add_argument("--coverage")
+    sp.add_argument("--house")
+    sp.add_argument("--status")
+    sp = sub.add_parser("events-list")
+    sp.add_argument("--coverage")
+    sp.add_argument("--severity")
+    sp = sub.add_parser("events-rate")
+    sp.add_argument("event_id")
+    sp.add_argument("rating", choices=["1", "-1"], type=int)
+    sp = sub.add_parser("cost")
+    sp.add_argument("--by", choices=["house", "run"], default="house")
+    sp = sub.add_parser("query")
+    sp.add_argument("coverage")
+    sp.add_argument("question")
+    sub.add_parser("config-check")
+
     return p
 
 
@@ -155,6 +185,32 @@ def run(args: argparse.Namespace) -> int:
                 return _emit(c.gates_list(), args.json_out)
             if args.cmd == "gates-answer":
                 return _emit(c.answer_gate(args.gate_id, args.answer, args.notes), args.json_out)
+            # read models (BUGS #1)
+            if args.cmd == "run-show":
+                return _emit(c.run_show(args.run_id), args.json_out)
+            if args.cmd == "run-retry":
+                return _emit(c.run_retry(args.run_id), args.json_out)
+            if args.cmd == "dossier-show":
+                return _emit(c.dossier_show(args.slug), args.json_out)
+            if args.cmd == "predictions-list":
+                return _emit(
+                    c.predictions_list(
+                        coverage=args.coverage, house=args.house, status=args.status
+                    ),
+                    args.json_out,
+                )
+            if args.cmd == "events-list":
+                return _emit(
+                    c.events_list(coverage=args.coverage, severity=args.severity), args.json_out
+                )
+            if args.cmd == "events-rate":
+                return _emit(c.events_rate(args.event_id, args.rating), args.json_out)
+            if args.cmd == "cost":
+                return _emit(c.cost(by=args.by), args.json_out)
+            if args.cmd == "query":
+                return _emit(c.query(args.coverage, args.question), args.json_out)
+            if args.cmd == "config-check":
+                return _emit(c.config_check(), args.json_out)
         except CoreError as exc:
             print(json.dumps(exc.body, default=str), file=sys.stderr)
             return 1

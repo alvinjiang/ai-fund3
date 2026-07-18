@@ -551,3 +551,259 @@ def health(session=Depends(get_session)):
         select(models.RunStage.id).where(models.RunStage.status == "queued").limit(1)
     )
     return {"status": "ok", "queue_pending": queue_depth is not None}
+
+
+# ----------------------------- research read models -----------------------------
+
+
+@router.get("/runs/{run_id}")
+def show_run(run_id: UUID, session: Session = Depends(get_session)):
+    run = session.get(models.Run, run_id)
+    if run is None:
+        raise ApiError("not_found", "run not found", status=404)
+    stages = session.scalars(
+        select(models.RunStage)
+        .where(models.RunStage.run_id == run_id)
+        .order_by(models.RunStage.seq)
+    ).all()
+    return {
+        "id": str(run.id),
+        "type": run.type,
+        "status": run.status,
+        "coverage_id": str(run.coverage_id) if run.coverage_id else None,
+        "cost_usd": str(run.cost_usd),
+        "budget_cap_usd": str(run.budget_cap_usd) if run.budget_cap_usd else None,
+        "trigger": run.trigger,
+        "error": run.error,
+        "stages": [
+            {
+                "seq": s.seq,
+                "role": s.role,
+                "house": s.house,
+                "status": s.status,
+                "attempts": s.attempts,
+                "cost_usd": str(s.cost_usd),
+            }
+            for s in stages
+        ],
+    }
+
+
+@router.post("/runs/{run_id}/retry")
+def retry_run(
+    run_id: UUID,
+    request: Request,
+    session: Session = Depends(get_session),
+    pm: str = Depends(require_pm),
+    idem: Idempotency = Depends(idempotency),
+):
+    if idem.replay is not None:
+        return idem.replay
+    old = session.get(models.Run, run_id)
+    if old is None:
+        raise ApiError("not_found", "run not found", status=404)
+    if old.status != RunStatus.FAILED.value:
+        raise ApiError("not_retryable", "only failed runs can be retried", status=400)
+    new = engine.create_run(
+        session,
+        old.type,
+        old.coverage_id,
+        fund=request.app.state.fund,
+        trigger="pm",
+        params=dict(old.params or {}),
+        requested_by=pm,
+        meta_houses=request.app.state.meta_houses,
+    )
+    response = {"run_id": str(new.id), "status": new.status, "retried_from": str(run_id)}
+    write_audit(
+        session,
+        action="run.retry",
+        actor_id=pm,
+        target=f"run:{new.id}",
+        after=response,
+        request_id=request.state.request_id,
+    )
+    idem.store(session, response, 201, "run.retry", pm)
+    return response
+
+
+@router.get("/coverage/{slug}/dossier")
+def show_dossier(slug: str, session: Session = Depends(get_session)):
+    cov = _require_coverage(session, slug)
+    idx = session.get(models.DossierIndex, cov.id)
+    if idx is None:
+        raise ApiError("not_found", "no dossier index for this coverage", status=404)
+    return {
+        "slug": idx.slug,
+        "stance": idx.stance,
+        "conviction": idx.conviction,
+        "target_price": str(idx.target_price) if idx.target_price else None,
+        "as_of": str(idx.as_of) if idx.as_of else None,
+        "tripwire_count": idx.tripwire_count,
+    }
+
+
+@router.get("/predictions")
+def list_predictions(
+    coverage: UUID | None = Query(default=None),
+    house: str | None = Query(default=None),
+    status_: str | None = Query(default=None, alias="status"),
+    session: Session = Depends(get_session),
+):
+    q = select(models.Prediction)
+    if coverage:
+        q = q.where(models.Prediction.coverage_id == coverage)
+    if house:
+        q = q.where(models.Prediction.house == house)
+    if status_:
+        q = q.where(models.Prediction.status == status_)
+    return [
+        {
+            "id": str(p.id),
+            "kind": p.kind,
+            "value": str(p.value) if p.value else None,
+            "currency": p.currency,
+            "house": p.house,
+            "status": p.status,
+            "horizon_date": str(p.horizon_date),
+            "confidence": str(p.confidence) if p.confidence else None,
+        }
+        for p in session.scalars(q.limit(200))
+    ]
+
+
+@router.get("/events")
+def list_events(
+    coverage: UUID | None = Query(default=None),
+    severity: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+):
+    q = select(models.Event)
+    if coverage:
+        q = q.where(models.Event.coverage_id == coverage)
+    if severity:
+        q = q.where(models.Event.severity == severity)
+    return [
+        {
+            "id": str(e.id),
+            "kind": e.kind,
+            "severity": e.severity,
+            "title": e.title,
+            "action": e.action,
+            "occurred_at": str(e.occurred_at),
+        }
+        for e in session.scalars(q.order_by(models.Event.occurred_at.desc()).limit(100))
+    ]
+
+
+class RateBody(BaseModel):
+    rating: int  # 1 = up, -1 = down
+
+
+@router.post("/events/{event_id}/rate")
+def rate_event(
+    event_id: UUID,
+    body: RateBody,
+    request: Request,
+    session: Session = Depends(get_session),
+    pm: str = Depends(require_pm),
+    idem: Idempotency = Depends(idempotency),
+):
+    if idem.replay is not None:
+        return idem.replay
+    ev = session.get(models.Event, event_id)
+    if ev is None:
+        raise ApiError("not_found", "event not found", status=404)
+    ev.pm_rating = body.rating
+    ev.pm_rated_at = __import__("core.db.types", fromlist=["utc_now"]).utc_now()
+    ev.pm_rated_by = pm
+    response = {"event_id": str(event_id), "rating": body.rating}
+    write_audit(
+        session,
+        action="event.rate",
+        actor_id=pm,
+        target=f"event:{event_id}",
+        after={"rating": body.rating},
+        request_id=request.state.request_id,
+    )
+    idem.store(session, response, 200, "event.rate", pm)
+    return response
+
+
+@router.get("/costs")
+def costs(
+    by: str = Query(default="house"),
+    session: Session = Depends(get_session),
+):
+    """Aggregate ``llm_usage`` by house, run, or day. Simple sum; the full reconciliation
+    (metered vs provider-reported) is deferred to the cost port (phase 7.2)."""
+    from sqlalchemy import func as sa_func
+
+    if by == "house":
+        col = models.LlmUsage.house
+    elif by == "run":
+        col = models.LlmUsage.run_id
+    else:
+        raise ApiError("bad_param", "by must be 'house' or 'run'", status=400)
+    rows = session.execute(
+        select(col, sa_func.coalesce(sa_func.sum(models.LlmUsage.cost_usd), 0))
+        .where(col.isnot(None))
+        .group_by(col)
+    ).all()
+    return [{"key": str(r[0]), "cost_usd": str(r[1])} for r in rows]
+
+
+class QueryBody(BaseModel):
+    coverage: str  # dossier slug
+    question: str
+
+
+@router.post("/queries")
+def new_query(
+    body: QueryBody,
+    request: Request,
+    session: Session = Depends(get_session),
+    pm: str = Depends(require_pm),
+    idem: Idempotency = Depends(idempotency),
+):
+    """Create a ``pm_query`` run (light model, API substrate, no lock)."""
+    if idem.replay is not None:
+        return idem.replay
+    cov = _require_coverage(session, body.coverage)
+    run = engine.create_run(
+        session,
+        "pm_query",
+        cov.id,
+        fund=request.app.state.fund,
+        trigger="pm",
+        params={"question": body.question},
+        requested_by=pm,
+        meta_houses=request.app.state.meta_houses,
+    )
+    response = {"run_id": str(run.id), "status": run.status}
+    write_audit(
+        session,
+        action="query.create",
+        actor_id=pm,
+        target=f"run:{run.id}",
+        after=response,
+        request_id=request.state.request_id,
+    )
+    idem.store(session, response, 201, "query.create", pm)
+    return response
+
+
+@router.get("/config/check")
+def config_check(session: Session = Depends(get_session)):
+    """Run checkconfig; return the result table. Never includes a secret value."""
+    from core.config.checkconfig import run_checks
+    from core.config.settings import get_settings
+
+    try:
+        from core.config.store import get_config
+
+        cfg = get_config()
+    except Exception:
+        return {"status": "FAIL", "detail": "config not loaded"}
+    results = run_checks(cfg, get_settings())
+    return {"results": [{"check": n, "status": s, "detail": d} for n, s, d in results]}
