@@ -8,6 +8,7 @@ from decimal import Decimal
 from core.config.fund import AutoCrossCheck, Escalation, FundConfig, MonitorCfg, RunPolicy
 from core.db import models
 from core.db.repo import coverage as cov_repo
+from core.db.types import utc_now
 from core.domain.enums import CoverageState
 from core.orchestrator import engine
 from tests.fakes.runner import FakeRunner
@@ -148,6 +149,36 @@ def test_budget_cap_pauses_run_at_budget_gate(session):
         session.query(models.PmGate).filter_by(run_id=run.id, kind="budget_cap", state="open").one()
     )
     assert gate.allowed_answers == ["raise_cap", "cancel"]
+
+
+def test_transient_failure_requeues_run_then_resumes(session):
+    """§6.1 transient reentry: a retryable failure with backoff puts the run back to
+    queued (lock retained); after backoff expires, the next tick resumes it to the gate."""
+    from datetime import timedelta
+
+    from core.domain.backoff import BackoffPolicy
+
+    real_backoff = BackoffPolicy(base_s=30, max_s=3600, jitter=0.0)
+    _seed_houses(session)
+    cov = cov_repo.propose(session, "2267", "tse", "Yakult", "JPY", "pm1")
+    session.flush()
+    run = engine.create_run(session, "initiation", cov.id, fund=_fund(), params={"lead": "gpt"})
+    engine.promote_run(session, run.id, fund=_fund())
+
+    runner = FakeRunner(fail_role="verifier", fail_times=1, backoff=real_backoff)
+    engine.advance_run(session, run.id, runner, fund=_fund())
+    # the verifier failed with a 30s backoff → run requeued (transient reentry)
+    session.refresh(run)
+    assert run.status == "queued"
+    # simulate backoff expiring
+    verifier = session.query(models.RunStage).filter_by(run_id=run.id, role="verifier").first()
+    assert verifier is not None and verifier.status == "queued"
+    verifier.available_at = utc_now() - timedelta(seconds=1)
+    session.flush()
+    # next tick: promote + advance → verifier succeeds on retry → finalizer → waiting_pm
+    engine.tick(session, runner, fund=_fund())
+    session.refresh(run)
+    assert run.status == "waiting_pm"
 
 
 def test_per_ticker_serialization_monitor_runs_while_initiation_waits(session):

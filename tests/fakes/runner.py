@@ -53,12 +53,14 @@ class FakeRunner:
         fail_times: int = 0,
         hang_roles: set[str] | None = None,
         cost_usd: Decimal = Decimal("0.01"),
+        backoff: BackoffPolicy = NO_DELAY,
     ) -> None:
         self.results = results or {}
         self.fail_role = fail_role
         self.fail_times = fail_times
         self.hang_roles = set(hang_roles or ())
         self.cost_usd = cost_usd
+        self.backoff = backoff
         self._fail_counts: dict[str, int] = {}
         self.claimed: list = []
 
@@ -79,7 +81,7 @@ class FakeRunner:
                 and self._fail_counts.get(stage.role, 0) < self.fail_times
             ):
                 self._fail_counts[stage.role] = self._fail_counts.get(stage.role, 0) + 1
-                queue.fail_stage(session, stage.id, attempt, retryable=True, backoff=NO_DELAY)
+                queue.fail_stage(session, stage.id, attempt, retryable=True, backoff=self.backoff)
             else:
                 result = self.results.get(stage.role) or _default_result(stage.role)
                 queue.complete_stage(session, stage.id, attempt, result)

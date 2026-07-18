@@ -13,7 +13,7 @@ initiation flow (proposed→initiating→decision_pending / →failed) are appli
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -290,6 +290,22 @@ def advance_run(session: Session, run_id: UUID, runner: Any, *, fund: FundConfig
     if any(s.status == StageStatus.FAILED.value for s in stages):
         last_error = next((s.error for s in stages if s.error), "stage failed")
         fail_run(session, run_id, error=last_error, fund=fund)
+        return
+    # Transient reentry (§6.1): a stage is waiting for retry backoff (queued, available_at
+    # in the future). Requeue the run so the orchestrator stops spinning on it; it re-enters
+    # at the current stage boundary once the backoff expires. The coverage lock is retained.
+    _now = utc_now()
+
+    def _backoff_pending(s: models.RunStage) -> bool:
+        if s.status != StageStatus.QUEUED.value or s.available_at is None:
+            return False
+        avail = (
+            s.available_at.replace(tzinfo=UTC) if s.available_at.tzinfo is None else s.available_at
+        )
+        return avail > _now
+
+    if any(_backoff_pending(s) for s in stages):
+        runs_repo.requeue_run(session, run_id, "transient stage failure; backoff pending")
         return
     # Per-run budget cap: if spend has crossed the cap, pause at a budget_cap gate instead
     # of continuing (design/05 §9: a run never silently degrades on cost). The PM raises

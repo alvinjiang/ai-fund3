@@ -22,6 +22,7 @@ from core.db import models
 from core.db.repo import coverage as cov_repo
 from core.db.repo import runs as runs_repo
 from core.db.schemas import LevelIn
+from core.db.types import utc_now
 from core.domain.coverage_sm import Action, IllegalTransition
 from core.domain.enums import RunStatus
 from core.orchestrator import engine
@@ -715,7 +716,7 @@ def rate_event(
     if ev is None:
         raise ApiError("not_found", "event not found", status=404)
     ev.pm_rating = body.rating
-    ev.pm_rated_at = __import__("core.db.types", fromlist=["utc_now"]).utc_now()
+    ev.pm_rated_at = utc_now()
     ev.pm_rated_by = pm
     response = {"event_id": str(event_id), "rating": body.rating}
     write_audit(
