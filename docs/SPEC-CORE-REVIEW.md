@@ -343,3 +343,132 @@ unit tests.
     callers; the engine keeps private copies of both.
 12. **`RunStage.error` never written** — every failed run reports the literal
     `"stage failed"`.
+
+---
+
+## §4 Scheduler
+
+**Correction to the prior truthing pass:** NOTES claims "2 of 9 jobs fully implemented,
+5 skeletons." The real count is **4 real / 5 pending / 1 partial**: `session_tick`,
+`watch_tick`, `retention` and `quarterly_sweep` are all real
+(`jobs.py:85,115,147,175`). The shape of the claim was right; the count understated it.
+
+- **Job registry** — PARTIAL **(verified)**. `JOBS` holds 7 cron jobs
+  (`jobs.py:277-285`). `session_tick`, `watch_tick` and `schedule_watchdog` are **not in
+  `JOBS`**, so `build_scheduler` can never register them (`scheduler.py:60-71`).
+- **The 5 pending jobs** (`earnings_sweep`, `prediction_scoring`,
+  `lead_review_candidacy`, `distillation`, `cost_rollup`) — MISSING, as
+  `NotImplementedError` skeletons (`jobs.py:213,218,225,232,237`). Their only test
+  asserts they *don't* work (`test_jobs.py:175`). This is the honest form of a stub —
+  loud, not silent — and matches AGENTS.md rule 3.
+- **§4(a) leader lock in every job** — PARTIAL. Present in the 4 real jobs
+  (`jobs.py:95,123,155,184`), but `schedule_watchdog` explicitly skips it
+  (`jobs.py:251`) and the 5 pending jobs raise before reaching it.
+- **§4(b) start + finish `scheduler_job_logs` rows** — DEVIATES. Only `session_tick`
+  writes a `started` row (`jobs.py:97`); `watch_tick` / `retention` / `quarterly_sweep`
+  write finish-only (`jobs.py:140,171,209`). No test asserts start rows.
+- **§4(c) deterministic `trigger_ref` idempotency** — IMPLEMENTED at the application
+  level (`jobs.py:98,125,202`, guarded by `_has_run` at `jobs.py:46`; tests
+  `test_jobs.py:67,150`). But the §4 partial unique index on
+  `(coverage_id, type, trigger_ref)` is **not in the schema**, so dedupe is a
+  read-then-write race rather than a DB constraint.
+- **Cron registration from `fund.yaml`** — IMPLEMENTED. The prior pass's APScheduler
+  claim is **confirmed**: `scheduler.py:51-72` registers each entry via
+  `CronTrigger.from_crontab`, with an unknown-job guard tested at
+  `test_scheduler.py:39`. Note `config/fund.yaml.example:28-33` wires only 5 of the 7
+  (`earnings_sweep` and `lead_review_candidacy` are absent).
+- **Calendar-driven session jobs (exchange pre/post)** — MISSING **(verified)**.
+  `calendar.py` is inert: `exchange_sessions` / `all_exchanges` are called only from
+  `test_section8_modules.py:50-52`. **Nothing parses `"pre:23:00"` into a trigger**, so
+  no code path ever reaches `session_tick` or `watch_tick` in production — the two
+  most-used jobs in §4 are dead code in a deployed system.
+- **`build_scheduler` production caller** — MISSING **(verified)**. The only entrypoint
+  is `fund = "cli.main:main"` (`pyproject.toml:39`); there is no core service entrypoint
+  and no systemd unit in-repo. `start()` / `shutdown()` are never called. The
+  `scheduler.py:7` docstring's claim that "systemd `ai-fund-core` calls them" is **false**
+  — exactly the kind of aspirational docstring AGENTS.md rule 3 forbids.
+
+### §4.4 Leader locks
+
+- **`pg_try_advisory_lock` taken by default** — IMPLEMENTED. `jobs.py:30-39` defaults
+  `is_leader=None`; `leader.py:18-23`. Signature-default guard at
+  `test_spec_coverage.py:42` and `test_jobs.py:188`.
+- **Fires-test proving a non-leader no-ops** — IMPLEMENTED, and it is a real one.
+  `tests/integration/db/test_leader_lock_pg.py:51-85` runs against Postgres: the
+  challenger gets 0 runs, the leader ≥1. Runs in CI (`.github/workflows/ci.yml:47`),
+  though skipped in the default unit run. This one meets the AGENTS.md bar.
+- **Lock release** — **MISSING — new bug, not previously logged (verified).** There is no
+  `pg_advisory_unlock` anywhere in `core/` (grep confirms: `leader.py` only ever *takes*
+  the lock). `run_job` opens a session per fire from a pooled `sessionmaker`
+  (`scheduler.py:33`, `core/db/session.py:17-22`, default `QueuePool`). A PostgreSQL
+  **session-level** advisory lock is held until explicitly unlocked or the *connection*
+  closes — returning a connection to the pool does neither. So job #1 leaves the lock
+  held on connection A forever; job #2, handed connection B, gets `False` from
+  `pg_try_advisory_lock` and **silently no-ops — permanently**. The integration test
+  masks this because it releases via an explicit `close()` in its own `finally`
+  (`test_leader_lock_pg.py:89-92`). Nothing covers the sequential-jobs-through-`run_job`
+  path. **Net effect once a core service exists: the scheduler runs exactly one job, then
+  goes quiet.**
+- **`ORCHESTRATOR_KEY` lock** — MISSING. `leader.py:14` defines it; it has zero call
+  sites. `engine.tick` (`engine.py:338`) takes no lock.
+
+---
+
+## §7 Failure-mode behaviors
+
+- **§7.1 worker crash → lease expiry → reaper requeue → fail after `max_attempts`** —
+  PARTIAL. The logic exists (`queue.py:208-233`) and is tested
+  (`test_queue_pg.py:143`), but `reap_expired` has **no production caller** — no reaper
+  job in `JOBS`, no loop. The "fails visibly to the desk" outbox notice is absent. In a
+  real deployment a crashed worker's stage stays `running` forever.
+- **§7.2 retryable provider outage → `running`→`queued` with backoff, lock retained** —
+  IMPLEMENTED at stage level (`queue.py:188-193`, `_next_available_at`). No test asserts
+  the *coverage lock is retained* across the requeue.
+- **§7.3 per-run cost cap → `waiting_pm` + `budget_cap` gate** — IMPLEMENTED (with the
+  post-hoc timing caveat from §3.5). `budgets.py:18-36`, called from `engine.py:314`.
+- **§7.3 per-house daily cap → stages unclaimable until midnight UTC + one desk notice
+  (`budget:{house}:{day}`)** — MISSING entirely. No daily-cap code anywhere; `budgets.py`
+  is 39 lines and handles only the per-run case. No dedupe key of that form exists.
+- **§7.4 two mutating runs on one ticker → second stays `queued`** — IMPLEMENTED.
+  Coverage-lock discipline in `runs.py:4` + `start_run`; covered by repo tests.
+- **§7.5 two core processes → loser idles** — PARTIAL. The lock works for scheduler jobs,
+  but with no core process entrypoint there is no process to idle, and the orchestrator
+  half is unlocked entirely.
+- **§7.6 PM never answers a gate** — PARTIAL. `waiting_pm` + the gate row persist and
+  `fund gates-list` exists (`cli/main.py:81,217`), but there is no desk-digest surfacing
+  of stale gates and no test that an unanswered gate appears in a digest.
+- **§7.7 config edited mid-run → run keeps pinned params** — PARTIAL. Params are
+  snapshotted into `runs.params` at creation, but no test reloads a mutated `FundConfig`
+  mid-run and asserts the in-flight run is unaffected.
+- **§7.8 scheduler dies → `schedule_watchdog` alerts; missed-tick check on boot** —
+  MISSING. `schedule_watchdog` (`jobs.py:242`) computes a stale list and **returns it** —
+  it emits no desk alert, and it has no caller outside `test_jobs.py:120`. It is in
+  neither `JOBS` nor `fund.yaml.example`, so **it can never be scheduled**. No boot-time
+  missed-tick check exists. This is v2's silent-scheduler-death lesson, unimplemented.
+
+### §4 / §7 gaps ranked by severity
+
+1. **No core service entrypoint** — `build_scheduler` and `engine.tick` both have zero
+   production callers. Nothing in a deployed system fires any job. Everything below is
+   downstream of this.
+2. **The advisory lock is never released** — with pooled connections the scheduler goes
+   permanently non-leader after the first job. Needs `pg_advisory_unlock` in a `finally`
+   (or a single long-lived leader connection), plus a test that drives two jobs in
+   sequence through `run_job` and asserts both ran.
+3. **`schedule_watchdog` emits no alert and is unschedulable** — the entire point of §7.8
+   is missing. Add it to `JOBS`, write an outbox notice, and test that the notice row
+   appears.
+4. **`session_tick` / `watch_tick` are unreachable** — `calendar.py` never converts
+   `"pre:23:00"` into a trigger and nothing registers these two jobs.
+5. **Per-house daily cap (§7.3)** entirely absent — no cap, no midnight-UTC unclaimable
+   window, no `budget:{house}:{day}` dedupe notice.
+6. **`reap_expired` has no caller (§7.1).**
+7. **Missing partial unique index** on `(coverage_id, type, trigger_ref)` — idempotency
+   is advisory only; two concurrent fires can both pass `_has_run`.
+8. **`test_spec_coverage.py` guards are weak.**
+   `test_scheduler_wiring_exists_and_is_callable` (`:36`) asserts only importability, and
+   `test_every_section4_cron_job_is_registered` (`:27`) passes with all 5 jobs still
+   raising `NotImplementedError`. Neither fails if the mechanism stops working, so by the
+   AGENTS.md definition-of-done they do not count as coverage. This is the spec-coverage
+   pattern degrading into the very box-ticking it was introduced to prevent.
+9. **Doc drift** — `scheduler.py:7` and NOTES assert systemd wiring that does not exist.
