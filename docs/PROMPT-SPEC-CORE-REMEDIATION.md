@@ -46,20 +46,21 @@ Also binding: TDD (test first, watch it fail, then implement). Every change gets
 word "complete"** unless every named mechanism has a test proving it fires. Run
 `pytest tests/unit` after each meaningful change; the baseline is 371 passed / 32 skipped.
 
-**Branch and review gate.** There is no PR process in this repo — do not open one, and do
-not wait on one. Work on `spec-core-remediation`, branched from `spec-core-truthing`, with
-**one commit per phase** (squash your working commits before finishing a phase). Do not
-merge to `main`; that decision is the PM's, and nothing has been merged yet.
+**Where to commit.** Straight to `main`, one commit per phase (squash your working commits
+before finishing a phase). There is no PR process — do not open one, do not wait on one.
+Branch only if a phase turns into a risky refactor you might throw away, and merge it back
+as soon as it is green rather than letting it accumulate.
 
-The gate is not a PR, it is a reading:
+**The review gate is a reading, not a PR:**
 
 1. You self-review the phase against `docs/BUILD_REVIEW_CHECKLISTS.md` — use the section
    for the area you touched as the focus list.
 2. You write the phase's `NOTES.md` entry (see "Reporting back" below).
-3. A reviewing agent audits the branch against the spec and folds findings into `BUGS.md`.
+3. A reviewing agent audits `main` against the spec and folds findings into `BUGS.md`.
 
 Each phase must leave `pytest tests/unit` green on its own — a phase that ends red is not
-finished, and the next phase does not start on top of it.
+finished, and the next phase does not start on top of it. Baseline as you pick this up:
+**371 passed, 32 skipped.**
 
 ---
 
@@ -103,7 +104,7 @@ passes no runner. Add a test asserting the production loop performs no drain.
 
 ---
 
-## Phase 1 — Core service entrypoint (branch `spec-core-service`)
+## Phase 1 — Core service entrypoint
 
 **This unblocks everything else.** Nothing in SPEC-CORE currently runs.
 
@@ -128,7 +129,7 @@ config without dropping in-flight runs. `KNOWN_DEAD` loses `tick` and `build_sch
 
 ---
 
-## Phase 2 — The two live bugs (branch `spec-core-authfix`)
+## Phase 2 — The two live bugs
 
 Small, independent, and shippable ahead of Phase 1 if you prefer — but **do not let them
 wait**, since finding 1 is a live exposure.
@@ -146,7 +147,7 @@ wait**, since finding 1 is a live exposure.
 
 ---
 
-## Phase 3 — Wire the disconnected mechanisms (branch `spec-core-wiring`)
+## Phase 3 — Wire the disconnected mechanisms
 
 Each item is "the code exists and is tested; nothing calls it." Deleting its `KNOWN_DEAD`
 entry is part of the definition of done.
@@ -176,7 +177,7 @@ entry is part of the definition of done.
 
 ---
 
-## Phase 4 — Test-integrity pass (branch `spec-core-testfix`)
+## Phase 4 — Test-integrity pass
 
 The review lists ten tautological or existence-only tests. Replace, don't delete blindly —
 each was guarding something real that deserves a genuine test.
@@ -196,7 +197,7 @@ each was guarding something real that deserves a genuine test.
 
 ---
 
-## Phase 5 — The declared-but-unimplemented side effects (branch `spec-core-sideeffects`)
+## Phase 5 — The declared-but-unimplemented side effects
 
 `core/db/repo/coverage.py:209` no-ops **seven** state-machine side effects behind a comment
 saying they are "cross-module or handled by the caller." **No caller exists.**
@@ -213,7 +214,7 @@ name from the SM table.** Both are honest; the current state is not. Note `POST
 
 ---
 
-## Phase 6 — Remaining gaps (branch `spec-core-cleanup`)
+## Phase 6 — Remaining gaps
 
 Lowest urgency; take from the review's per-section ranked lists.
 

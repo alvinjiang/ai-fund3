@@ -35,13 +35,16 @@
 
 **Workflow (carry over from v2 — they worked):**
 - Spec → implement. Each feature gets a self-contained `specs/SPEC-*.md` first
-  (strongest reasoning model tier), then a BUILD branch implements it. One branch per spec.
-- **There is no PR process and nothing has been merged to `main` yet.** Do not open PRs,
-  do not merge — merging is the PM's call. The review gate is a reading, not a PR: the
-  implementor self-reviews against **`docs/BUILD_REVIEW_CHECKLISTS.md`** (per-spec criteria
-  written in advance by the spec-review tier; use the section for the branch as the focus
-  areas) and writes `NOTES.md`; a reviewing agent then audits the branch and folds findings
-  into `BUGS.md`.
+  (strongest reasoning model tier), then the implementation follows it.
+- **Commit to `main`.** There is no PR process. Only two agents work this repo, so trunk
+  is simplest: commit directly to `main`, in coherent commits that leave
+  `pytest tests/unit` green. Branch **only** when work genuinely needs isolation (a risky
+  refactor, or a spike you may throw away) — name it `spec-<topic>`, and merge it back
+  yourself as soon as it is green rather than letting it accumulate.
+- **The review gate is a reading, not a PR.** The implementor self-reviews against
+  **`docs/BUILD_REVIEW_CHECKLISTS.md`** (per-spec criteria written in advance by the
+  spec-review tier; use the section for the area touched) and writes `NOTES.md`; a
+  reviewing agent then audits `main` and folds findings into `BUGS.md`.
 - **Document roles.** `BUGS.md` is the reviewer's tracker — implementors cite item numbers
   ("closes BUGS #7") and do not edit it. `NOTES.md` is the implementor's channel back:
   dated entries covering what fires now that didn't before (name the test), decisions taken

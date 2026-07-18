@@ -7,13 +7,13 @@ anything here disagrees with `AGENTS.md`, `AGENTS.md` wins. Keep this file short
 ## Workflow (carried over from v2 — it worked)
 
 - **Spec → implement.** Each feature gets a self-contained `specs/SPEC-*.md` first
-  (strongest reasoning tier), then a BUILD branch implements it.
-- **One branch per spec.** Branch names: `spec-<topic>`. There is no PR process — the
-  review gate is a reviewing-agent pass over the branch against
-  `docs/BUILD_REVIEW_CHECKLISTS.md`. Merging to `main` is the PM's call.
+  (strongest reasoning tier), then the implementation follows it.
+- **Commit to `main`.** No PR process; branch (`spec-<topic>`) only when work needs
+  isolation, and merge back as soon as it is green. The review gate is a reviewing-agent
+  pass over `main` against `docs/BUILD_REVIEW_CHECKLISTS.md`.
 - **TDD.** Run `pytest` after each meaningful change.
 - **Every change gets a dated `NOTES.md` entry** (date, reason, affected files).
-  `README.md` is updated on every feature branch.
+  `README.md` is updated whenever a change makes it stale.
 
 ## Environment setup
 
