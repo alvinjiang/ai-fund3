@@ -223,13 +223,24 @@ Lowest urgency; take from the review's per-section ranked lists.
 
 ---
 
-## Reporting back
+## Reporting back — `NOTES.md` is your channel
 
-For each phase, report: what fires now that didn't before (name the test), what you
-deferred and why, and what you found that the review missed. **Update `BUGS.md` as you
-go** — the review recommends reopening **#3** (the four §8 modules were created but none
-is called, which fails the repo's own definition-of-done) and widening **#4**'s scope note.
+**`NOTES.md` is how you communicate back.** Write a dated entry per phase covering:
 
-If you find the review wrong about something, say so with evidence. It was written from
-`file:line` reading plus targeted reproduction, not from running the full system — which
-did not run at the time.
+- **What fires now that didn't before** — name the test, and say what breaks if the
+  mechanism is removed. This is the evidence that the item is actually done.
+- **Implementation decisions you took**, especially anywhere you departed from D1–D4 or
+  from the review's reading. Say why.
+- **What the specs don't answer.** If `specs/SPEC-CORE.md` is silent, ambiguous, or
+  contradicts SPEC-DOMAIN, write the question down rather than guessing. Spec amendments
+  are cheap; wrong guesses that look implemented are what produced this review.
+- **What you deferred, and what is still missing** — explicit lists, per AGENTS.md rule 4.
+  Never the word "complete" unless every named mechanism has a test proving it fires.
+
+**Do not edit `BUGS.md`.** That is the reviewer's tracker; your `NOTES.md` entries are
+folded into it on the next review pass. Item numbers there are stable references — cite
+them (e.g. "closes BUGS #7") rather than editing the file.
+
+If you find the review wrong about something, say so in `NOTES.md` with evidence. It was
+written from `file:line` reading plus targeted reproduction, not from running the full
+system — which did not run at the time.
