@@ -155,3 +155,191 @@ from spec in a way that changes behavior).
    and market-data reachability, dossier/doctrine) are the ones that gate a safe service start.
 10. **Missing model fields**: `pricing.effective_from`, `fund.lead_review.candidacy`,
     `verify_count` 1..3 bound.
+
+---
+
+## §3 Run orchestrator
+
+This is the section with the most serious findings. The headline: **the orchestrator loop
+has no production caller.** `engine.tick` is referenced exactly once in the repo, from
+`tests/unit/orchestrator/test_engine.py:179` **(verified)**. There is no orchestrator
+process, no `JOBS` entry, no service entrypoint. Everything in §3.3 is exercised only by
+unit tests.
+
+### §3.1 Run creation
+
+- **`create_run` insert + stage materialization** — IMPLEMENTED. `engine.py:42-114` plans
+  stages then `create_run` + `add_stages` in one flush (`core/db/repo/runs.py:45-95`),
+  with `depends_on_seq` chained. Production callers: `routes.py:193,439,608,774`,
+  `jobs.py:107,130,205`.
+- **(1) validate request against coverage state** — MISSING. `create_run` loads the
+  coverage (`engine.py:59`) but never checks its state. An `initiation` on an `active`
+  coverage, or a `deep_review` on `proposed`, is accepted. No test asserts rejection.
+- **(2) config pinning — `doctrine_version_id`** — MISSING in practice **(verified)**.
+  The parameter exists (`engine.py:53`, `runs.py:54`) but **no caller ever passes it** —
+  grep across `routes.py`, `jobs.py` and `engine.py` finds only the definition and the
+  default. Every run row is created with `doctrine_version_id = NULL`, so **no run is
+  pinned to a doctrine version** and the audit/replay guarantee is unbacked.
+  `budget_cap_usd` / `max_attempts` / `verify_count` pinning is real (`engine.py:97,67,72`).
+- **(3) one transaction** — PARTIAL. `create_run` only `flush()`es; the transaction
+  boundary is the caller's. Nothing enforces run+stages atomicity at the engine layer.
+- **(4) emit outbox `run.created`** — MISSING **(verified)**. `grep -rn "run.created"`
+  over `*.py` returns nothing. `finish_run` emits `run.finished` only (`runs.py:157`).
+- **Idempotency / dedupe of concurrent identical runs** — PARTIAL. Idempotency rests
+  solely on the partial unique index over `(coverage_id, type, trigger_ref)`
+  (`models.py:218-226`, integration test `test_trigger_ref_unique.py`). Scheduler jobs
+  pre-check with `_has_run` (TOCTOU — the index is the real guard), but
+  `create_run` does **not** catch `IntegrityError`, so a genuine double-fire raises out
+  of the job rather than no-op'ing. PM-triggered runs with no `trigger_ref` have no
+  creation-time dedupe at all: two identical initiations both insert, the coverage lock
+  serializes them at promote, and the loser sits `queued` forever.
+
+### §3.2 Stage graphs / planner
+
+- **Planner purity** — IMPLEMENTED. `planner.py` takes no session, does no I/O, is
+  deterministic; 12 tests in `test_planner.py`.
+- **All 7 run types have graphs** — IMPLEMENTED. `planner.py:50-96`; unknown type raises
+  `PlanError`.
+- **Contributor rotation** — DEVIATES; **the mechanism is inert.**
+  `rotation.order_contributors` is only ever called with an **empty** `last_used_at` map
+  (`planner.py:53,69`) — nothing queries prior stage rows for last use. Ordering
+  collapses to alphabetical (`resolve_contributors` already returns `sorted(...)`,
+  `coverage.py:353`), so **verify pairs calcify** — precisely the failure the spec calls
+  out. `test_rotation.py` tests the pure helper only; deleting the planner's rotation
+  call breaks no test. Fails the AGENTS.md fires-test rule.
+- **Substrate rules** — PARTIAL. Substrates match the table except `event_analysis`,
+  hardcoded to `harness` (`planner.py:77`) with no `severity=info` api-triage path. The
+  "light model" requirement for `monitor_tick`/`pm_query` is not represented in `StageIn`.
+- **`pm_query` role-prompt precondition** — MISSING. The spec requires `pm_query` runs to
+  fail validation until `doctrine/roles/pm_query.md` exists. The file does not exist, and
+  `POST /queries` (`routes.py:774`) creates the run anyway.
+
+### §3.3 Orchestrator loop
+
+- **`engine.tick()` production caller** — MISSING **(verified)**. See headline above.
+- **(1) promote runs** — PARTIAL. `promote_run` (`engine.py:117-129`) does `start_run` +
+  coverage transition and correctly returns `False` (stays `queued`, no backoff) when the
+  coverage lock is held; tested at `test_engine.py:196`. But it does not check house
+  budgets before promoting, and `tick` iterates queued runs in arbitrary order, **ignoring
+  `runs.priority`**.
+- **(2) claimability in the claim SQL** — IMPLEMENTED. `queue.py:36-60` enforces run
+  `running`, `available_at <= now`, and the `depends_on_seq` `EXISTS`, under
+  `FOR UPDATE SKIP LOCKED`. Covered by `test_queue_pg.py`.
+- **(3) collect finished stages / `on_stage_finished`** — DEVIATES. No such function; the
+  logic is inlined in `advance_run` (`engine.py:269-319`) and re-scans **all** stages of
+  the run on every call rather than the newly-terminal ones. `advance_run` also calls
+  `runner.drain(session)` (`engine.py:274`) — the engine **pushes** the runner
+  synchronously, inverting the spec's pull model where runners claim independently.
+  Re-entrancy is safe only because `_register_predictions` leans on
+  `register_from_stage` idempotency and the cross-check has an explicit already-exists
+  guard (`engine.py:196-201`); nothing else is guarded.
+- **(4) reap expired leases** — MISSING from the loop **(verified)**. `queue.reap_expired`
+  is implemented and tested (`queue.py:208`, `test_queue.py:163`,
+  `test_review_paths.py:64`, `test_queue_pg.py:143`) but **`tick` never calls it** — grep
+  finds no non-test caller. Lease expiry and stage-timeout detection therefore **never
+  fire in production**. This is a fully-built, fully-tested safety mechanism with no
+  production caller.
+- **(5) transient re-entry (BUGS #2)** — PARTIAL. It does fire: `engine.py:299-309`
+  requeues when a stage is `queued` with a future `available_at`, and
+  `test_engine.py:154-181` fails if it is removed. But the trigger is "a backoff timer is
+  pending", not "a stage failed retryably" — a stage requeued by the reaper, or any future
+  `available_at`, requeues the run. And because `tick` promotes queued runs
+  unconditionally, the run flips `queued→running→queued` every tick until backoff expires,
+  overwriting `runs.error` with a synthetic string each pass.
+- **(7) watchdog (`stage_timeout_s × 2` → desk alert)** — MISSING. No implementation, no
+  test. `stage_timeout_s` is parsed into `RunPolicy` and never read by the orchestrator.
+- **"one short transaction per item" / advisory lock** — MISSING. `tick` runs everything
+  on one session with no per-item commit (`engine.py:338-347`), so a crash mid-tick loses
+  the whole tick. `core/scheduler/leader.py` exists but `tick` never takes the advisory
+  lock — two orchestrator processes would both promote and both drive runners.
+
+### §3.4 `on_stage_finished`
+
+- **Persist result / predictions** — PARTIAL. Predictions are registered
+  (`engine.py:132-159`, asserted at `test_engine.py:57`). **Corrections (with
+  attribution), disagreements, and the dossier commit row are not persisted at all** —
+  no repo module exists for them and the engine never references them.
+- **Dynamic cross-check append** — IMPLEMENTED, with two dead arms. `engine.py:175-225`
+  + `cross_check.py`; `last_tp` is captured before registration so a run cannot suppress
+  its own check (`engine.py:280-285`), and `test_engine.py:85-128` fails if it is removed.
+  But `last_stance` and `event_severity` are always passed `None` (`engine.py:189-190`),
+  so **two of the three spec triggers (stance change, `thesis`-severity event) can never
+  fire** — only the ΔTP arm is live.
+- **Attempt counting / `max_attempts`** — IMPLEMENTED, in the queue rather than the
+  engine. `claim_stage` increments `attempts` (`queue.py:78`); `fail_stage` retries only
+  while `attempts < max_attempts` (`queue.py:180`), else terminal. `reap_expired` applies
+  the same rule. Tested at `test_queue.py:163`.
+- **Terminal vs transient classification** — PARTIAL. `retryable` is a caller-supplied
+  argument to `queue.fail_stage`; nothing in core maps an error to terminal-vs-transient,
+  so classification belongs entirely to the (not-yet-existing) runner.
+- **`fail_run` with last validation errors** — PARTIAL. `fail_run` (`engine.py:251-263`)
+  sets status/error, releases the lock, transitions the coverage and emits `run.finished`
+  (tested at `test_engine.py:67-82`). But **`RunStage.error` is never written by any
+  producer** (`queue.fail_stage` stores `validation_errors` on the attempt row only), so
+  `last_error` (`engine.py:291`) always resolves to the literal `"stage failed"` and the
+  desk alert carries no validation detail.
+
+### §3.5 Gates and budgets
+
+- **Terminal gate `initiation_decision`** — IMPLEMENTED, via the coverage-SM side effect
+  `open_gate:initiation_decision` (`coverage.py:182-193`) reached from `finalize_run`
+  (`engine.py:231-246`); asserted at `test_engine.py:54-55`.
+- **Terminal gates `lead_change` / `doctrine_amendment`** — MISSING **(verified)**.
+  `finalize_run` special-cases `run.type == "initiation"` only; every other run type falls
+  to the `else` branch and calls `finish_run(SUCCEEDED)` (`engine.py:247-248`). A
+  `lead_review` or `distillation` run **never opens its gate and silently succeeds** — the
+  PM decision the spec requires is skipped entirely.
+- **`gates.terminal_gate` mapping (BUGS #3)** — DEVIATES **(verified)**. The mapping is
+  correct (`gates.py:9-18`) but has **no production caller**; its only test
+  (`test_section8_modules.py:33`) asserts the dict against itself. Deleting `gates.py`
+  changes no runtime behavior. Passes "symbol exists + has a test", fails "has a
+  production caller."
+- **Per-run budget cap** — DEVIATES. The spec requires the check *before launching each
+  stage attempt* (`cost + expected_stage_cost < cap`); the implementation checks *after*
+  the runner has drained every claimable stage (`engine.py:313-315`). The existing test
+  documents the overspend: `test_engine.py:131-151` shows a $0.02 cap running all four
+  stages to $0.04 before pausing — **2× the cap**. The gate itself is correct
+  (`budget_cap`, `["raise_cap","cancel"]`, run→`waiting_pm`).
+- **`raise_cap` / `cancel` handling** — MISSING. Nothing consumes a `budget_cap` answer:
+  no code writes a new cap into `runs.params` or re-queues/cancels the run (`grep
+  raise_cap` finds only the `allowed_answers` literals). **A budget-paused run is
+  permanently stuck holding its coverage lock.**
+- **`budgets.py` module (BUGS #3)** — DEVIATES **(verified)**. `run_over_budget` /
+  `pause_for_budget` have no production caller; `engine.py:313` and `engine.py:322-335`
+  are a verbatim private duplicate (`_pause_for_budget`). Only
+  `test_section8_modules.py:13` touches the module.
+- **Per-house daily budgets** — MISSING. BUGS #4's "DEFERRED" understates the scope.
+  Missing: reserve/settle under `SELECT … FOR UPDATE`, `available_at = next UTC midnight`
+  on cap, run stays `queued`, and the once-per-house-per-day desk notice
+  (`budget:{house}:{day}`). Only the `house_budget_days` table (`models.py:615`) and the
+  config shape (`houses.py:23`) exist; **no code reads or writes the table.**
+- **`answer_gate` idempotency** — PARTIAL. `runs.answer_gate` (`runs.py:193-211`) replays
+  a same-key answer, but a **different** answer to an already-answered gate silently
+  overwrites rather than returning 409. It also applies no side effects (coverage
+  transition, branch merge, prediction status, outbox) — those live in `coverage_sm` on a
+  separate path.
+
+### §3 gaps ranked by severity
+
+1. **No orchestrator process at all.** `engine.tick` has zero production callers. Nothing
+   promotes, reaps, or watchdogs in a deployed system.
+2. **`reap_expired` never called from `tick`** — lease-expiry and timeout detection are
+   dead in production despite being fully implemented and tested.
+3. **`lead_review` and `distillation` never open their terminal gates** — they complete
+   as `succeeded`, skipping the required PM decision.
+4. **`budget_cap` gate answers unhandled** — `raise_cap`/`cancel` do nothing; the run and
+   its coverage lock are stranded permanently.
+5. **Contributor rotation is inert** — `last_used_at` is never derived; verify pairs
+   calcify exactly as the design principle warns.
+6. **Budget check is post-hoc, not pre-attempt** — runs provably overspend their cap (2×
+   in the existing test).
+7. **`doctrine_version_id` never passed** — no run is pinned to a doctrine version.
+8. **`create_run` skips coverage-state validation and never emits `run.created`** (§3.1
+   steps 1 and 4).
+9. **Cross-check stance and severity arms are hardcoded `None`** — only the ΔTP trigger
+   can fire.
+10. **Corrections / disagreements / dossier commit rows never persisted** on stage success.
+11. **Dead-code duplication:** `budgets.py` and `gates.py` (BUGS #3) have no production
+    callers; the engine keeps private copies of both.
+12. **`RunStage.error` never written** — every failed run reports the literal
+    `"stage failed"`.
