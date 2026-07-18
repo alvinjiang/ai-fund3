@@ -1,5 +1,71 @@
 # NOTES
 
+## 2026-07-18 — SPEC-CORE implementation review (docs/SPEC-CORE-REVIEW.md)
+
+**Affected files:** `docs/SPEC-CORE-REVIEW.md` (new), `NOTES.md`. No production code
+changed — this pass is audit only. Unit suite unchanged at 370 passed / 32 skipped.
+
+Section-by-section audit of `specs/SPEC-CORE.md` §2–§9 against the implementation on
+`spec-core-truthing`, after the truthing pass and BUGS #1–#5. Highest-severity findings
+were reproduced by running the code rather than inferred from reading; those are marked
+**(verified)** in the review doc.
+
+**Implemented: the full §2–§9 audit. Deferred: none. Missing: no fixes applied** — this
+is a review, and the findings are recorded for a follow-up branch.
+
+**Two live bugs found that were not previously logged:**
+
+- **Read routes are entirely unauthenticated.** §5.2 requires the bearer token on reads;
+  `create_app` includes the router with no dependency (`core/api/app.py:62`), and
+  `require_pm` is on mutations only. Driving the in-process app with no `Authorization`
+  header at all returns 200 from `/coverage`, `/runs`, `/gates`, `/predictions`,
+  `/events`, `/costs` and `/health`. No test covers it.
+- **The advisory lock is never released.** There is no `pg_advisory_unlock` anywhere in
+  `core/`. `run_job` takes a session-level lock per fire from a pooled `sessionmaker`, so
+  job #1 holds the lock on its pooled connection indefinitely and every later job on a
+  different connection silently no-ops. The integration test masks this by `close()`ing
+  explicitly in its own `finally`.
+
+Plus two smaller ones: `GET /gates?state=` is silently ignored (the `Query` has no
+`alias="state"`, so the public param is literally `state_`), and operator `queue.backoff`
+tuning in `fund.yaml` is silently discarded (the YAML nests it, `QueueCfg` declares it
+flat — masked because the code defaults equal the template values).
+
+**The structural finding.** Neither `engine.tick` nor `build_scheduler` has a production
+caller, and nothing reads `/etc/ai-fund/*.yaml` from disk. SPEC-CORE describes a service;
+what exists is a well-tested library that no process invokes. Twelve mechanisms are
+implemented, tested, and disconnected: `engine.tick`, `build_scheduler`, `reap_expired`,
+`resolve_provider_keys`, `gates.terminal_gate`, `budgets.run_over_budget`,
+`budgets.pause_for_budget`, `calendar.exchange_sessions`, `cli.format.table`,
+`hang_roles`, `ORCHESTRATOR_KEY`, and the seven coverage-SM side effects.
+
+**The pattern, named.** *A mechanism is built and tested in isolation, then never
+connected — and the test written to guard it asserts its existence rather than its
+effect, so the disconnection is invisible.* The spec-coverage test pattern introduced last
+round to catch missing implementations has itself degraded into box-ticking:
+`assert callable(f)` and `assert set(JOBS) == {...}` pass with every body replaced by
+`pass`. The worst case is `tests/unit/domain/test_coverage_sm.py:277,283,289`, which
+asserts `merge_branch` / `predictions_open` / `supersede_predictions` as strings in a
+table while `core/db/repo/coverage.py:209` no-ops all of them behind a "handled by the
+caller" comment — and there is no caller.
+
+**Proposed AGENTS.md addition (not yet applied):** *a spec-coverage test must assert
+behavior, never existence — if it would still pass with the function body replaced by
+`pass`, it is not a test*; plus a mechanical guard asserting every public symbol in
+`core/orchestrator/`, `core/scheduler/` and `cli/format.py` has a non-test caller. That
+one test would have caught eleven of the twelve dead mechanisms.
+
+**BUGS.md accuracy:** #1, #2 and #5 are legitimately DONE (verified — 26↔26 route/CLI
+parity is real and the read models are genuine queries, not stubs). **#3 should be
+reopened**: the four §8 modules were created but none is called, which fails the repo's
+own definition-of-done. **#4's "DEFERRED" understates scope** — the midnight-UTC
+unclaimable window and the per-house-per-day desk notice are also absent, and nothing
+reads or writes `house_budget_days`.
+
+Recommended order of work is in the review's Synthesis section: service entrypoint first
+(nothing else can be observed without it), then the two live bugs, then the config read
+path, then wiring the disconnected mechanisms.
+
 ## 2026-07-18 — PM decisions recorded; docs/NEXT_STEPS.md created
 
 Three PM answers recorded in the owning specs (same Fable session as below):
