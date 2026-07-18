@@ -1,0 +1,38 @@
+# Operator house registry — copy to /etc/ai-fund/houses.yaml and fill in real model ids.
+# Model ids, keys, and prices live HERE (and in pricing.yaml), never in code.
+# Every api_key_env must be present in /etc/ai-fund/.env (checkconfig enforces presence).
+houses:
+  gpt:
+    display_name: GPT
+    provider: openai
+    api_key_env: OPENAI_API_KEY
+    base_url_env: OPENAI_BASE_URL        # optional override
+    models:
+      heavy: "<operator fills in>"       # e.g. the model id for initiation/deep_review
+      light: "<operator fills in>"       # monitor scoring / pm_query
+    harness:
+      type: codex-cli                    # driver key resolved by SPEC-RUNNER
+      config: { }
+    budgets:
+      daily_usd: 25
+      per_run_usd: 40
+    assignable: true
+    enabled: true
+  gemini:
+    display_name: Gemini
+    provider: google
+    api_key_env: GOOGLE_API_KEY
+    models: { heavy: "<operator fills in>", light: "<operator fills in>" }
+    harness: { type: gemini-cli }
+    budgets: { daily_usd: 25, per_run_usd: 40 }
+    assignable: true
+    enabled: true
+  claude:
+    display_name: Claude
+    provider: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+    models: { heavy: "<operator fills in>" }
+    harness: { type: claude-code }
+    assignable: false                   # PM decision: Claude is meta, not an analyst
+    meta: true
+    enabled: true

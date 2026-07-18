@@ -368,10 +368,14 @@ testcontainers) green; ruff clean.
 
 Next: Phase 1.3 (spec-core) — orchestrator + config + core API + CLI (`SPEC-CORE.md`).
 
-## 2026-07-18 — Phase 1.3 (spec-core) BUILD complete — SPEC-CORE implemented
+## 2026-07-18 — Phase 1.3 (spec-core) BUILD — **partially** implemented (corrected 2026-07-19)
 
-Implemented `specs/SPEC-CORE.md` on branch `spec-core`, TDD from the spec's §9 plan. 335
-unit + 9 integration tests green; ruff clean.
+> **Correction (2026-07-19 design review):** the original heading said "BUILD complete."
+> It was not. The scheduler, leader lock, and several §8 layout files were stubs or
+> absent. The claim is corrected here and in the round-3 entry below. The lesson:
+> never claim "complete" without a fires-test proving every named mechanism works.
+
+Implemented `specs/SPEC-CORE.md` on branch `spec-core`, TDD from the spec's §9 plan.
 
 - **Config (§2):** `settings` (pydantic-settings, required `core_api_token`, frozen,
   `_env_file=None` test override), `houses` (assignable/meta exclusivity, ≥1 assignable,
@@ -499,3 +503,68 @@ unmerged because item 1 touches `core/orchestrator/` (spec-core territory). 344 
   kept `CORE_API_TOKEN`/`ARTIFACTS_DIR` (Settings still needs them).
 - **#5 `BUGS.md` deleted** (`git rm`) — the work is recorded here; an empty tracked
   defect list in the repo root reads as open bugs to anyone arriving later.
+
+## 2026-07-19 — Design-review truthing pass (spec-core-truthing branch)
+
+The design agent identified a systematic pattern: **safety mechanisms that read as present
+but never fire.** Three instances: (1) the alembic check tautology (fixed round 2), (2) the
+model-guard regex that missed `gpt-4o` and checked no prices, (3) the advisory lock defined
+but never called. Plus: 7/10 scheduler jobs were missing, APScheduler was never wired into
+production, and several §8 layout files were absent — while NOTES claimed "BUILD complete."
+
+**What was fixed (with fires-tests):**
+
+- **Advisory lock WIRED.** Every job now calls `pg_try_advisory_lock(session, SCHEDULER_KEY)`
+  by default (`is_leader` defaults to `None`, not `lambda: True`). Integration test
+  (`test_leader_lock_pg.py`) proves a non-leader session no-ops while the leader session's
+  job runs. The lock FIRES.
+- **APScheduler wired.** `core/scheduler/scheduler.py` — `build_scheduler(fund, factory)`
+  registers every `fund.scheduler` cron entry via `CronTrigger.from_crontab`; `run_job`
+  opens a session, runs the job, records `scheduler_job_logs`, and treats pending-spec
+  `NotImplementedError` as a loudly-logged `skipped` (not a silent no-op). Unit tests
+  prove registration + dispatch + skip-recording.
+- **7 missing jobs.** `retention` + `quarterly_sweep` fully implemented (delete aged rows;
+  create `deep_review` for stale active coverage — both idempotent + tested). The five
+  spec-dependent jobs (`earnings_sweep`, `prediction_scoring`, `lead_review_candidacy`,
+  `distillation`, `cost_rollup`) are skeletons that raise `NotImplementedError("pending
+  SPEC-X")` — wired to fire, fail loudly. Not silent.
+- **Model-guard strengthened.** Broadened the regex to catch `gpt-4o`-style ids (removed
+  the trailing `\b` that caused the miss) and added `$\d+.\d+` price-literal detection.
+  A **fires-test** (`test_guard_actually_fires_on_a_known_bad_fixture`) proves a fixture
+  with `"gpt-4o"` and `$0.015` is caught. The guard FIRES.
+- **Config templates.** `config/houses.yaml.example`, `fund.yaml.example`,
+  `pricing.yaml.example` added (operators have a template for `/etc/ai-fund/`).
+- **Spec-coverage guard.** `test_spec_coverage.py` asserts every §4 cron job is in `JOBS`
+  + the calendar-driven jobs exist + `is_leader` defaults to `None`. If a job is removed
+  or a default reverts to `lambda: True`, CI fails.
+- **NOTES corrected.** "BUILD complete" → "partially implemented" with an explicit
+  correction note. Overclaiming is what let the gaps persist through two review rounds.
+
+**Still honestly deferred (not overclaimed):**
+
+- Full CLI §6 parity (~12 of ~25 commands exist; missing `checkconfig`, `bootstrap`,
+  `run-show`, `query`, `dossier`, `track-record`, `predictions`, `events`, `cost`).
+- Read-model API routes (`/queries`, `/predictions`, `/track-record`, `/events`, `/costs`).
+- `requeue_run` is defined+tested but has no production caller in the engine (transient
+  reentry deferred to SPEC-RUNNER).
+- §8 organizational modules: `core/orchestrator/{budgets,gates}.py`,
+  `core/scheduler/calendar.py`, `cli/format.py`, the `routes/` package split.
+- Per-house daily budgets (`house_budget_days`).
+
+**Prevention recommendations (the "how to avoid future issues of this sort"):**
+
+1. **Every safety mechanism needs a fires-test** — a test that proves it changes behavior,
+   not just exists. Rule: *if you can't write a test that fails when the mechanism is
+   removed, you haven't implemented it.* The alembic drift test, the advisory-lock
+   non-leader test, and the model-guard fixture test are the templates.
+2. **Spec-coverage tests** — enumerate the spec's feature lists (§4 jobs, §5 routes, §6 CLI
+   commands) and assert each exists + has at least one exercising test. The
+   `test_spec_coverage.py` pattern catches "missing" not just "unmapped."
+3. **No "wiring omitted" in production docstrings** — say what the code does, not what
+   tests don't. "APScheduler wiring is omitted in unit tests" was a lie when there was no
+   wiring anywhere.
+4. **NOTES must say "partially implemented"** with explicit deferred/missing lists.
+   "BUILD complete" without proving every named mechanism fires is the overclaim that
+   let gaps survive two review rounds.
+5. **Definition-of-done for a safety mechanism**: (a) at least one production caller?
+   (b) at least one test that fails when it's removed? If either is "no," it's not done.

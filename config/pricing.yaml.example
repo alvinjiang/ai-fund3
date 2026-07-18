@@ -1,0 +1,10 @@
+# Operator per-model pricing — copy to /etc/ai-fund/pricing.yaml. The ONLY place a model
+# price exists; an unpriced model is a hard error at checkconfig and at cost attribution.
+# Replace <model-id> with the exact ids used under houses.*.models.*.
+models:
+  "<model-id>":
+    input_per_mtok: 0.00
+    output_per_mtok: 0.00
+    cached_input_per_mtok: 0.00
+    currency: USD
+    effective_from: 2026-07-01
